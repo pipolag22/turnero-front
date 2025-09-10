@@ -1,36 +1,37 @@
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import { createBrowserRouter, RouterProvider } from 'react-router-dom'
-import './index.css'
-import App from './App'
-import Login from './pages/Login'
-import PublicQueue from './pages/PublicQueue'
-import BoxPanel from './pages/BoxPanel'
-import AdminUsers from './pages/AdminUsers'
-import { AuthProvider } from './context/AuthContext'
-import TVBoard from './pages/TVBoard';
-import BoxWall from './pages/BoxWall';
-import Intake from './pages/Intake';
-import PsyPanel from './pages/PsyPanel';
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import ProtectedRoute from "./context/ProtectedRoute";
+import AdminPage from "./pages/AdminPage";
+import PuestoPage from "./pages/PuestoPage";
+import TVBoard from "./pages/TVBoard";
+import Login from "./pages/Login";
+
 
 const router = createBrowserRouter([
-  { path: '/', element: <PublicQueue /> },
-  { path: '/login', element: <Login /> },
-  { path: '/box', element: <BoxPanel /> },     
-  { path: '/wall', element: <BoxWall /> },     
-  { path: '/tv', element: <TVBoard /> },       
-  { path: '/admin/users', element: <AdminUsers /> },
-  { path: '/app', element: <App /> },
-  { path: '/intake', element: <Intake /> }, 
-  { path: "/psy", element: <PsyPanel />},
-  { path: '/admin/users', element: <AdminUsers /> },
-  
-])
+  {
+  path: "/admin",
+  element: (
+    <ProtectedRoute allow={["ADMIN"]}>
+      <AdminPage />
+    </ProtectedRoute>
+  ),
+},
+{
+  path: "/puesto",
+  element: (
+    <ProtectedRoute allow={["ADMIN", "PUESTO"]}>
+      <PuestoPage />
+    </ProtectedRoute>
+  ),
+},
+{ path: "/tv", element: <TVBoard /> },   // pública o protegida si querés
+{ path: "/login", element: <Login /> },
+{ path: "/", element: <PuestoPage /> },
+]);
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <AuthProvider>
-      <RouterProvider router={router} />
-    </AuthProvider>
-  </React.StrictMode>,
-)
+    <RouterProvider router={router} />
+  </React.StrictMode>
+);

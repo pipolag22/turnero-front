@@ -1,19 +1,21 @@
-import { io } from 'socket.io-client';
+// src/lib/realtime.ts
+import { io, Socket } from "socket.io-client";
+import { API_URL } from "./api";
 
-const URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-
-
-export const socket = io(URL, {
-  transports: ['websocket'],
+export const socket: Socket = io(API_URL, {
+  transports: ["websocket"],
+  withCredentials: true,
   autoConnect: true,
 });
 
 
 export function joinPublicRooms() {
-  socket.emit('subscribe', { rooms: [
-    'public:stage:LIC_DOCS_IN_SERVICE',
-    'public:stage:WAITING_PSY',
-    'public:stage:PSY_IN_SERVICE',
-    'public:stage:WAITING_LIC_RETURN',
-  ]});
+  socket.emit("subscribe", {
+    rooms: [
+      "public:stage:LIC_DOCS_IN_SERVICE",
+      "public:stage:WAITING_PSY",
+      "public:stage:PSY_IN_SERVICE",
+      "public:stage:WAITING_LIC_RETURN",
+    ],
+  });
 }

@@ -1,28 +1,21 @@
-import QueueList from '../components/QueueList';
-import type { Stage } from '../types';
+import { useColaRealtime } from "./hooks/useColaRealtime";
 
-const COLS: { stage: Stage; title: string }[] = [
-  { stage: 'LIC_DOCS_IN_SERVICE', title: 'Documentación' },
-  { stage: 'WAITING_PSY',          title: 'Esperando Psico' },
-  { stage: 'PSY_IN_SERVICE',       title: 'En Psico' },
-  { stage: 'WAITING_LIC_RETURN',   title: 'Regreso a Lic' },
-];
 
 export default function TVBoard() {
-  return (
-    <div className="min-h-screen bg-zinc-900 text-white p-4">
-      <header className="max-w-7xl mx-auto mb-4">
-        <h1 className="text-3xl font-extrabold tracking-tight">Turnero • Pantalla</h1>
-        <p className="text-zinc-400">Actualiza cada ~4s</p>
-      </header>
+  const { snap } = useColaRealtime();
+  if (!snap) return null;
 
-      <main className="max-w-7xl mx-auto grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {COLS.map(c => (
-          <div key={c.stage} className="bg-zinc-800 p-2 rounded-2xl">
-            <QueueList stage={c.stage} title={c.title} big refreshMs={4000} limit={15}/>
-          </div>
-        ))}
-      </main>
+  const ahora = snap.nowServing;
+  const nextFrom =
+    (snap.colas.BOX && snap.colas.BOX[0]) ||
+    (snap.colas.PSICO && snap.colas.PSICO[0]) ||
+    null;
+
+  return (
+    <div className="h-screen w-screen bg-black text-white flex flex-col items-center justify-center gap-8">
+      <div className="text-5xl font-bold">Ahora atendiendo</div>
+      <div className="text-7xl">{ahora?.nombre ?? "—"}</div>
+      <div className="text-3xl opacity-70">Siguiente: {nextFrom?.nombre ?? "—"}</div>
     </div>
   );
 }

@@ -6,6 +6,25 @@ export type Stage =
   | 'COMPLETED'
   | 'CANCELLED';
 
+export type Estado = "EN_COLA" | "EN_ATENCION" | "DERIVADO" | "FINALIZADO" | "CANCELADO";
+export type Etapa  = "RECEPCION" | "BOX" | "PSICO" | "FINAL";
+
+export interface Turno {
+  id: string;
+  nombre?: string;
+  estado: Estado;
+  etapa: Etapa;
+  date: string;       
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SnapshotDia {
+  date: string;
+  colas: Record<Etapa, Turno[]>;
+  nowServing?: Turno | null;
+}
+
 export type TicketRow = {
   id: string;
   queueNumber: number;
