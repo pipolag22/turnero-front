@@ -1,21 +1,21 @@
 // src/lib/realtime.ts
 import { io, Socket } from "socket.io-client";
-import { API_URL } from "./api";
 
-export const socket: Socket = io(API_URL, {
+export const socket: Socket = io(import.meta.env.VITE_API_URL, {
   transports: ["websocket"],
   withCredentials: true,
   autoConnect: true,
 });
 
-
+// Rooms públicas por etapa en el modelo nuevo
 export function joinPublicRooms() {
   socket.emit("subscribe", {
     rooms: [
-      "public:stage:LIC_DOCS_IN_SERVICE",
-      "public:stage:WAITING_PSY",
-      "public:stage:PSY_IN_SERVICE",
-      "public:stage:WAITING_LIC_RETURN",
+      "public:stage:RECEPCION",
+      "public:stage:BOX",
+      "public:stage:PSICO",
+      "public:stage:FINAL",
+      "public:tv",
     ],
   });
 }
