@@ -64,7 +64,7 @@ export default function TVBoard() {
     return <div style={{ padding: 24, fontFamily: "system-ui, sans-serif" }}><h2>TV — cargando…</h2></div>;
   }
 
-  // llamando = EN_COLA y está reservado (assignedBox o assignedUserId)
+  // llamando = EN_COLA y reservado (assignedBox o assignedUserId)
   function split(stage: Etapa) {
     const list = snap.colas[stage] || [];
     const llamando   = list.filter(t => t.status === "EN_COLA" && (t.assignedBox != null || t.assignedUserId != null));
@@ -90,7 +90,7 @@ export default function TVBoard() {
 
         {/* BOX */}
         <Columna etapa="BOX" titulo={TITULOS.BOX}>
-          <ListaConBox titulo={`Llamando (${box.llamando.length})`} items={box.llamando} />
+          <ListaConBox titulo={`Llamando (${box.llamando.length})`} items={box.llamando} highlight />
           <ListaConBox titulo={`Atendiendo (${box.atendiendo.length})`} items={box.atendiendo} />
           <Divider />
           <ListaSimple titulo={`Esperando para Psicofísico (${psy.enCola.length})`} items={psy.enCola} />
@@ -98,15 +98,15 @@ export default function TVBoard() {
 
         {/* PSICO */}
         <Columna etapa="PSICO" titulo={TITULOS.PSICO}>
-          <ListaSimple titulo={`Llamando (${psy.llamando.length})`} items={psy.llamando} />
-          <ListaSimple titulo={`Atendiendo (${psy.atendiendo.length})`} items={psy.atendiendo} />
+          <ListaConBox titulo={`Llamando (${psy.llamando.length})`} items={psy.llamando} highlight />
+          <ListaConBox titulo={`Atendiendo (${psy.atendiendo.length})`} items={psy.atendiendo} />
           <Divider />
           <ListaSimple titulo={`Esperando para Retiro (${fin.enCola.length})`} items={fin.enCola} />
         </Columna>
 
         {/* FINAL */}
         <Columna etapa="FINAL" titulo={TITULOS.FINAL}>
-          <ListaConBox titulo={`Llamando (${fin.llamando.length})`} items={fin.llamando} />
+          <ListaConBox titulo={`Llamando (${fin.llamando.length})`} items={fin.llamando} highlight />
           <ListaConBox titulo={`Atendiendo (${fin.atendiendo.length})`} items={fin.atendiendo} />
         </Columna>
       </div>
@@ -147,13 +147,23 @@ function ListaSimple({ titulo, items }: { titulo: string; items: Turno[] }) {
   );
 }
 
-function ListaConBox({ titulo, items }: { titulo: string; items: Turno[] }) {
+function ListaConBox({ titulo, items, highlight = false }: { titulo: string; items: Turno[]; highlight?: boolean }) {
   return (
     <div style={{ marginBottom: 12 }}>
       <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>{titulo}</div>
       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
         {items.slice(0, 6).map((t) => (
-          <li key={t.id} style={{ padding: "8px 10px", border: "1px solid #e5e7eb", borderRadius: 8, marginBottom: 8, background: "#fff", fontWeight: 600 }}>
+          <li
+            key={t.id}
+            style={{
+              padding: "8px 10px",
+              border: "1px solid #e5e7eb",
+              borderRadius: 8,
+              marginBottom: 8,
+              background: highlight ? "#fef3c7" : "#fff", // amber-100
+              fontWeight: highlight ? 700 : 600,
+            }}
+          >
             <div>{t.nombre?.trim() || "—"}</div>
             {t.assignedBox != null && <div style={{ fontSize: 12, opacity: 0.7 }}>Box {t.assignedBox}</div>}
           </li>
