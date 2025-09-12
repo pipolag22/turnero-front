@@ -1,4 +1,3 @@
-// src/pages/TVBoard.tsx
 import { useEffect, useMemo, useState } from "react";
 import { TicketsApi } from "@/lib/api";
 import { socket, joinPublicRooms } from "@/lib/realtime";
@@ -35,7 +34,6 @@ export default function TVBoard() {
   useEffect(() => {
     refresh();
     joinPublicRooms();
-
     const onSnapshot = (s: Snapshot) => setSnap(s);
     const onChange = () => refresh();
 
@@ -63,19 +61,16 @@ export default function TVBoard() {
   }, [date]);
 
   if (loading || !snap) {
-    return (
-      <div style={{ padding: 24, fontFamily: "system-ui, sans-serif" }}>
-        <h2>TV — cargando…</h2>
-      </div>
-    );
+    return <div style={{ padding: 24, fontFamily: "system-ui, sans-serif" }}><h2>TV — cargando…</h2></div>;
   }
 
-  // helpers para separar EN_ATENCION y EN_COLA por etapa
+  // llamando = EN_COLA y está reservado (assignedBox o assignedUserId)
   function split(stage: Etapa) {
     const list = snap.colas[stage] || [];
-    const enAtencion = list.find((t) => t.status === "EN_ATENCION") || null;
-    const enCola = list.filter((t) => t.status === "EN_COLA");
-    return { enAtencion, enCola };
+    const llamando   = list.filter(t => t.status === "EN_COLA" && (t.assignedBox != null || t.assignedUserId != null));
+    const atendiendo = list.filter(t => t.status === "EN_ATENCION");
+    const enCola     = list.filter(t => t.status === "EN_COLA" && (t.assignedBox == null && t.assignedUserId == null));
+    return { llamando, atendiendo, enCola };
   }
 
   const rec = split("RECEPCION");
@@ -87,86 +82,44 @@ export default function TVBoard() {
     <div style={{ padding: 24, fontFamily: "system-ui, sans-serif" }}>
       <h1 style={{ marginBottom: 16 }}>Panel TV — {snap.date}</h1>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: 16,
-        }}
-      >
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
         {/* RECEPCION */}
-        <ColumnaEtapa etapa="RECEPCION" titulo={TITULOS.RECEPCION}>
-          <PanelActual titulo="Ahora atendiendo" actual={rec.enAtencion} />
-          <Lista titulo={`Siguientes (${rec.enCola.length})`} items={rec.enCola} />
-        </ColumnaEtapa>
+        <Columna etapa="RECEPCION" titulo={TITULOS.RECEPCION}>
+          <ListaSimple titulo={`Siguientes (${rec.enCola.length})`} items={rec.enCola} />
+        </Columna>
 
-        {/* BOX + espera intermedia a PSICO */}
-        <ColumnaEtapa etapa="BOX" titulo={TITULOS.BOX}>
-          <PanelActual titulo="Ahora atendiendo" actual={box.enAtencion} />
-          <Lista titulo={`Siguientes (${box.enCola.length})`} items={box.enCola} />
+        {/* BOX */}
+        <Columna etapa="BOX" titulo={TITULOS.BOX}>
+          <ListaConBox titulo={`Llamando (${box.llamando.length})`} items={box.llamando} />
+          <ListaConBox titulo={`Atendiendo (${box.atendiendo.length})`} items={box.atendiendo} />
           <Divider />
-          <Lista
-            titulo={`Esperando para Psicofísico (${psy.enCola.length})`}
-            items={psy.enCola}
-          />
-        </ColumnaEtapa>
+          <ListaSimple titulo={`Esperando para Psicofísico (${psy.enCola.length})`} items={psy.enCola} />
+        </Columna>
 
-        {/* PSICO + espera intermedia a FINAL */}
-        <ColumnaEtapa etapa="PSICO" titulo={TITULOS.PSICO}>
-          <PanelActual titulo="Ahora atendiendo" actual={psy.enAtencion} />
-          <Lista titulo={`Siguientes (${psy.enCola.length})`} items={psy.enCola} />
+        {/* PSICO */}
+        <Columna etapa="PSICO" titulo={TITULOS.PSICO}>
+          <ListaSimple titulo={`Llamando (${psy.llamando.length})`} items={psy.llamando} />
+          <ListaSimple titulo={`Atendiendo (${psy.atendiendo.length})`} items={psy.atendiendo} />
           <Divider />
-          <Lista
-            titulo={`Esperando para Retiro (${fin.enCola.length})`}
-            items={fin.enCola}
-          />
-        </ColumnaEtapa>
+          <ListaSimple titulo={`Esperando para Retiro (${fin.enCola.length})`} items={fin.enCola} />
+        </Columna>
 
-        {/* FINAL (solo muestra la espera para retorno a Licencia) */}
-        <ColumnaEtapa etapa="FINAL" titulo={TITULOS.FINAL}>
-          <PanelActual titulo="Ahora atendiendo" actual={fin.enAtencion} />
-          <Lista
-            titulo={`En espera de retorno a Licencia (${fin.enCola.length})`}
-            items={fin.enCola}
-          />
-        </ColumnaEtapa>
+        {/* FINAL */}
+        <Columna etapa="FINAL" titulo={TITULOS.FINAL}>
+          <ListaConBox titulo={`Llamando (${fin.llamando.length})`} items={fin.llamando} />
+          <ListaConBox titulo={`Atendiendo (${fin.atendiendo.length})`} items={fin.atendiendo} />
+        </Columna>
       </div>
     </div>
   );
 }
 
 /* ---------- UI helpers ---------- */
-
-function ColumnaEtapa({
-  etapa,
-  titulo,
-  children,
-}: {
-  etapa: Etapa;
-  titulo: string;
-  children: React.ReactNode;
-}) {
+function Columna({ etapa, titulo, children }: { etapa: Etapa; titulo: string; children: React.ReactNode; }) {
   return (
-    <div
-      style={{
-        border: "1px solid #e5e7eb",
-        borderRadius: 12,
-        padding: 16,
-        minHeight: 320,
-        background: "#fff",
-      }}
-    >
+    <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 16, minHeight: 320, background: "#fff" }}>
       <div style={{ marginBottom: 12 }}>
-        <div
-          style={{
-            fontSize: 14,
-            opacity: 0.7,
-            marginBottom: 4,
-            textTransform: "uppercase",
-          }}
-        >
-          {etapa}
-        </div>
+        <div style={{ fontSize: 14, opacity: 0.7, marginBottom: 4, textTransform: "uppercase" }}>{etapa}</div>
         <div style={{ fontSize: 18, fontWeight: 600 }}>{titulo}</div>
       </div>
       {children}
@@ -174,55 +127,18 @@ function ColumnaEtapa({
   );
 }
 
-function PanelActual({ titulo, actual }: { titulo: string; actual: Turno | null }) {
-  return (
-    <div
-      style={{
-        background: "#f3f4f6",
-        borderRadius: 10,
-        padding: 12,
-        marginBottom: 12,
-      }}
-    >
-      <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>{titulo}</div>
-      <div style={{ fontSize: 24, fontWeight: 700, lineHeight: 1.2 }}>
-        {actual?.nombre?.trim() || "—"}
-      </div>
-    </div>
-  );
-}
-
-function Lista({ titulo, items }: { titulo: string; items: Turno[] }) {
+function ListaSimple({ titulo, items }: { titulo: string; items: Turno[] }) {
   return (
     <div>
       <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>{titulo}</div>
       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
         {items.slice(0, 6).map((t) => (
-          <li
-            key={t.id}
-            style={{
-              padding: "8px 10px",
-              border: "1px solid #e5e7eb",
-              borderRadius: 8,
-              marginBottom: 8,
-              background: "#fff",
-              fontWeight: 600,
-            }}
-          >
+          <li key={t.id} style={{ padding: "8px 10px", border: "1px solid #e5e7eb", borderRadius: 8, marginBottom: 8, background: "#fff", fontWeight: 600 }}>
             {t.nombre?.trim() || "—"}
           </li>
         ))}
         {items.length === 0 && (
-          <li
-            style={{
-              opacity: 0.6,
-              fontStyle: "italic",
-              padding: "8px 10px",
-              border: "1px solid #e5e7eb",
-              borderRadius: 8,
-              background: "#fff",
-            }}
-          >
+          <li style={{ opacity: 0.6, fontStyle: "italic", padding: "8px 10px", border: "1px solid #e5e7eb", borderRadius: 8, background: "#fff" }}>
             — vacío —
           </li>
         )}
@@ -231,6 +147,25 @@ function Lista({ titulo, items }: { titulo: string; items: Turno[] }) {
   );
 }
 
-function Divider() {
-  return <div style={{ height: 10 }} />;
+function ListaConBox({ titulo, items }: { titulo: string; items: Turno[] }) {
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>{titulo}</div>
+      <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+        {items.slice(0, 6).map((t) => (
+          <li key={t.id} style={{ padding: "8px 10px", border: "1px solid #e5e7eb", borderRadius: 8, marginBottom: 8, background: "#fff", fontWeight: 600 }}>
+            <div>{t.nombre?.trim() || "—"}</div>
+            {t.assignedBox != null && <div style={{ fontSize: 12, opacity: 0.7 }}>Box {t.assignedBox}</div>}
+          </li>
+        ))}
+        {items.length === 0 && (
+          <li style={{ opacity: 0.6, fontStyle: "italic", padding: "8px 10px", border: "1px solid #e5e7eb", borderRadius: 8, background: "#fff" }}>
+            — vacío —
+          </li>
+        )}
+      </ul>
+    </div>
+  );
 }
+
+function Divider() { return <div style={{ height: 10 }} />; }
