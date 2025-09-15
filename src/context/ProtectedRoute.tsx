@@ -6,11 +6,20 @@ type Props = {
   children: React.ReactNode;
 };
 
+function homeForRole(role?: string) {
+  if (role === "ADMIN") return "/admin";
+  return "/puesto";
+}
+
 export default function ProtectedRoute({ allow, children }: Props) {
   const { token, me } = useAuth();
 
   if (!token || !me) return <Navigate to="/login" replace />;
-  if (allow.length && !allow.includes(me.role)) return <Navigate to="/puesto" replace />;
+
+ 
+  if (allow.length && !allow.includes(me.role)) {
+    return <Navigate to={homeForRole(me.role)} replace />;
+  }
 
   return <>{children}</>;
 }

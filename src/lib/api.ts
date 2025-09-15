@@ -91,16 +91,46 @@ export const UsersApi = {
     const { data } = await api.get('/users');
     return data as Array<{ id: string; email: string; name: string; role: Role; boxNumber: number | null }>;
   },
-  async create(u: { email: string; name: string; password: string; role: Role; boxNumber?: number | null }) {
-    const { data } = await api.post('/users', u);
+
+  // Permitimos boxNumber como number | '' | null en la INTERFAZ para poder pasar lo que viene del input
+  async create(u: { email: string; name: string; password: string; role: Role; boxNumber?: number | '' | null }) {
+    const body: any = {
+      email: u.email,
+      name: u.name,
+      password: u.password,
+      role: u.role,
+    };
+
+    if (u.role === 'BOX_AGENT') {
+      const parsed = u.boxNumber === '' || u.boxNumber == null ? NaN : Number(u.boxNumber);
+      if (!Number.isNaN(parsed)) body.boxNumber = parsed; // sólo enviamos si es número
+    }
+
+    const { data } = await api.post('/users', body);
     return data;
   },
-  async update(id: string, patch: Partial<{ name: string; role: Role; boxNumber: number | null }>) {
-    const { data } = await api.patch(`/users/${id}`, patch);
+
+  async update(
+    id: string,
+    patch: Partial<{ name: string; role: Role; boxNumber: number | '' | null }>
+  ) {
+    const body: any = {};
+    if (patch.name !== undefined) body.name = patch.name;
+    if (patch.role !== undefined) body.role = patch.role;
+
+    if (patch.role === 'BOX_AGENT') {
+      const parsed =
+        patch.boxNumber === '' || patch.boxNumber == null ? NaN : Number(patch.boxNumber);
+      if (!Number.isNaN(parsed)) body.boxNumber = parsed;
+    }
+
+    const { data } = await api.patch(`/users/${id}`, body);
     return data;
   },
+
   async remove(id: string) {
     const { data } = await api.delete(`/users/${id}`);
     return data;
   },
 };
+

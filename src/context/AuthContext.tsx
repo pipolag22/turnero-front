@@ -1,4 +1,3 @@
-// src/context/AuthContext.tsx
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { jwtDecode } from "jwt-decode";
 import type { UserMe } from "@/types";
@@ -7,7 +6,7 @@ import { loginApi } from "@/lib/api";
 type AuthCtx = {
   token: string | null;
   me: UserMe | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<UserMe>;
   logout: () => void;
 };
 
@@ -33,16 +32,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     else localStorage.removeItem("token");
   }, [token]);
 
-  async function login(email: string, password: string) {
+  async function login(email: string, password: string): Promise<UserMe> {
     const { accessToken } = await loginApi(email, password);
+    
     setToken(accessToken);
+    const decoded = jwtDecode<UserMe>(accessToken);
+    return decoded;
   }
 
   function logout() {
+  
+    try {
+      localStorage.removeItem("token");
+      sessionStorage.clear();
+    } catch {}
     setToken(null);
+  
   }
 
   return (
-    <Ctx.Provider value={{ token, me, login, logout }}>{children}</Ctx.Provider>
+    <Ctx.Provider value={{ token, me, login, logout }}>
+      {children}
+    </Ctx.Provider>
   );
 }

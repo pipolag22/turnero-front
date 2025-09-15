@@ -1,97 +1,155 @@
+// src/pages/AdminUsers.tsx
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { UsersApi } from "@/lib/api";
 import type { Role } from "@/types";
 
-type UserRow = { id: string; email: string; name: string; role: Role; boxNumber: number | null };
+type User = {
+  id: string;
+  email: string;
+  name: string;
+  role: Role;
+  boxNumber: number | null;
+};
+
+const ROLES: Role[] = ["ADMIN", "BOX_AGENT", "PSYCHO_AGENT"];
 
 export default function AdminUsers() {
-  const [users, setUsers] = useState<UserRow[]>([]);
-  const [form, setForm] = useState({ email: "", name: "", password: "", role: "BOX_AGENT" as Role, boxNumber: "" });
+  const nav = useNavigate();
+  const [list, setList] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  async function load() { setUsers(await UsersApi.list()); }
+  // Crear nuevo
+  const [nEmail, setNEmail] = useState("");
+  const [nName, setNName] = useState("");
+  const [nPass, setNPass] = useState("");
+  const [nRole, setNRole] = useState<Role>("BOX_AGENT");
+  const [nBox, setNBox] = useState<number | "">(1);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const data = await UsersApi.list();
+      setList(data);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   useEffect(() => { load(); }, []);
 
-  async function onCreate(e: React.FormEvent) {
-    e.preventDefault();
+  async function create() {
+    if (!nEmail.trim() || !nName.trim() || !nPass.trim()) return;
     await UsersApi.create({
-      email: form.email.trim(),
-      name: form.name.trim() || form.email.trim(),
-      password: form.password,
-      role: form.role,
-      boxNumber: form.boxNumber ? Number(form.boxNumber) : null,
+      email: nEmail.trim(),
+      name: nName.trim(),
+      password: nPass,
+      role: nRole,
+      boxNumber: nRole === "BOX_AGENT" ? Number(nBox) || null : null,
     });
-    setForm({ email: "", name: "", password: "", role: "BOX_AGENT", boxNumber: "" });
+    setNEmail(""); setNName(""); setNPass("");
+    setNRole("BOX_AGENT"); setNBox(1);
     await load();
   }
 
-  async function saveRow(u: UserRow) {
-    await UsersApi.update(u.id, { role: u.role, boxNumber: u.boxNumber });
+  async function save(u: User) {
+    await UsersApi.update(u.id, {
+      name: u.name,
+      role: u.role,
+      boxNumber: u.role === "BOX_AGENT" ? (u.boxNumber ?? null) : null,
+    });
     await load();
   }
 
-  async function del(u: UserRow) {
-    if (!confirm(`Eliminar ${u.email}?`)) return;
-    await UsersApi.remove(u.id);
+  async function remove(id: string) {
+    if (!confirm("¿Eliminar usuario?")) return;
+    await UsersApi.remove(id);
     await load();
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <h1 className="text-xl font-semibold mb-4">Usuarios</h1>
-
-      <form onSubmit={onCreate} className="mb-6 grid grid-cols-5 gap-2 items-end">
-        <input className="border rounded px-2 py-1" placeholder="Email" value={form.email} onChange={e=>setForm({...form, email:e.target.value})}/>
-        <input className="border rounded px-2 py-1" placeholder="Nombre" value={form.name} onChange={e=>setForm({...form, name:e.target.value})}/>
-        <input className="border rounded px-2 py-1" placeholder="Password" type="password" value={form.password} onChange={e=>setForm({...form, password:e.target.value})}/>
-        <select className="border rounded px-2 py-1" value={form.role} onChange={e=>setForm({...form, role: e.target.value as Role})}>
-          <option value="ADMIN">ADMIN</option>
-          <option value="BOX_AGENT">BOX_AGENT</option>
-          <option value="PSYCHO_AGENT">PSYCHO_AGENT</option>
-        </select>
-        <div className="flex gap-2">
-          <input className="border rounded px-2 py-1 w-24" placeholder="Box Nº" value={form.boxNumber} onChange={e=>setForm({...form, boxNumber: e.target.value})}/>
-          <button className="px-3 py-1 rounded bg-indigo-600 text-white" type="submit">Crear</button>
+    <div className="p-6 max-w-5xl mx-auto">
+      
+      <div className="flex items-center gap-3 mb-6">
+        <h1 className="text-2xl font-bold">Administración de usuarios</h1>
+        <div className="ml-auto">
+          <button
+            onClick={() => nav("/admin")}
+            className="px-3 py-2 rounded bg-slate-700 text-white"
+          >
+            ← Volver a Administración
+          </button>
         </div>
-      </form>
+      </div>
 
-      <table className="w-full border-collapse">
-        <thead>
-          <tr className="text-left border-b">
-            <th className="py-2">Email</th><th>Nombre</th><th>Rol</th><th>Box Nº</th><th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {users.map(u => (
-            <tr key={u.id} className="border-b">
-              <td className="py-2">{u.email}</td>
-              <td>{u.name}</td>
-              <td>
-                <select value={u.role} onChange={e => setUsers(prev => prev.map(x => x.id===u.id ? {...x, role: e.target.value as Role} : x))}>
-                  <option value="ADMIN">ADMIN</option>
-                  <option value="BOX_AGENT">BOX_AGENT</option>
-                  <option value="PSYCHO_AGENT">PSYCHO_AGENT</option>
-                </select>
-              </td>
-              <td>
+      {/* Crear */}
+      <div className="border rounded p-3 mb-6">
+        <h2 className="font-semibold mb-3">Crear usuario</h2>
+        <div className="grid grid-cols-5 gap-2 items-center">
+          <input className="border rounded px-2 py-1" placeholder="Email"
+            value={nEmail} onChange={(e) => setNEmail(e.target.value)} />
+          <input className="border rounded px-2 py-1" placeholder="Nombre"
+            value={nName} onChange={(e) => setNName(e.target.value)} />
+          <input type="password" className="border rounded px-2 py-1" placeholder="Password"
+            value={nPass} onChange={(e) => setNPass(e.target.value)} />
+          <select className="border rounded px-2 py-1"
+            value={nRole} onChange={(e) => setNRole(e.target.value as Role)}>
+            {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+          </select>
+          <input className="border rounded px-2 py-1" placeholder="Box #"
+            value={nBox} onChange={(e) => setNBox(e.target.value === "" ? "" : Number(e.target.value))}
+            disabled={nRole !== "BOX_AGENT"} />
+        </div>
+        <div className="mt-3">
+          <button onClick={create} className="px-3 py-2 rounded bg-blue-600 text-white">Crear</button>
+        </div>
+      </div>
+
+      {/* Lista */}
+      <div className="border rounded p-3">
+        <h2 className="font-semibold mb-3">Usuarios existentes</h2>
+        {loading ? (
+          <div>Cargando…</div>
+        ) : list.length === 0 ? (
+          <div className="italic opacity-60">— vacío —</div>
+        ) : (
+          <div className="space-y-3">
+            {list.map((u) => (
+              <div key={u.id} className="grid grid-cols-6 gap-2 items-center">
+                <div className="truncate">{u.email}</div>
                 <input
-                  className="border rounded px-2 py-1 w-24"
-                  type="number"
-                  value={u.boxNumber ?? ""}
-                  onChange={e => {
-                    const v = e.target.value;
-                    setUsers(prev => prev.map(x => x.id===u.id ? {...x, boxNumber: v==="" ? null : Number(v)} : x));
-                  }}
+                  className="border rounded px-2 py-1"
+                  value={u.name || ""}
+                  onChange={(e) => setList(prev => prev.map(p => p.id === u.id ? { ...p, name: e.target.value } : p))}
                 />
-              </td>
-              <td className="space-x-2">
-                <button className="px-3 py-1 rounded bg-emerald-600 text-white" onClick={() => saveRow(u)}>Guardar</button>
-                <button className="px-3 py-1 rounded bg-red-600 text-white" onClick={() => del(u)}>Borrar</button>
-              </td>
-            </tr>
-          ))}
-          {users.length === 0 && <tr><td className="py-4 opacity-60" colSpan={5}>Sin usuarios</td></tr>}
-        </tbody>
-      </table>
+                <select
+                  className="border rounded px-2 py-1"
+                  value={u.role}
+                  onChange={(e) => setList(prev => prev.map(p => p.id === u.id ? { ...p, role: e.target.value as Role } : p))}
+                >
+                  {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+                <input
+                  className="border rounded px-2 py-1"
+                  placeholder="Box #"
+                  value={u.boxNumber ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value === "" ? null : Number(e.target.value);
+                    setList(prev => prev.map(p => p.id === u.id ? { ...p, boxNumber: v as any } : p));
+                  }}
+                  disabled={u.role !== "BOX_AGENT"}
+                />
+                <button onClick={() => save(u)} className="px-3 py-2 rounded bg-emerald-600 text-white">
+                  Guardar
+                </button>
+                <button onClick={() => remove(u.id)} className="px-3 py-2 rounded bg-rose-600 text-white">
+                  Borrar
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

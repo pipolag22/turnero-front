@@ -1,4 +1,3 @@
-// src/pages/Login.tsx
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useNavigate } from "react-router-dom";
@@ -16,8 +15,13 @@ export default function Login() {
     setErr(null);
     setLoading(true);
     try {
-      await login(email, password);
-      nav("/puesto");
+      const user = await login(email, password);
+      // Redirección por rol
+      if (user.role === "ADMIN") {
+        nav("/admin", { replace: true });
+      } else {
+        nav("/puesto", { replace: true });
+      }
     } catch (e: any) {
       setErr(e?.message ?? "Error de login");
     } finally {

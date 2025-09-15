@@ -1,5 +1,6 @@
 // src/pages/AdminPage.tsx
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { TicketsApi } from '@/lib/api';
 import type { Etapa } from '@/types';
 import { useColaRealtime } from './hooks/useColaRealtime';
@@ -7,6 +8,7 @@ import { useColaRealtime } from './hooks/useColaRealtime';
 export default function AdminPage() {
   const { snap, date } = useColaRealtime();
   const [nombre, setNombre] = useState("");
+  const nav = useNavigate();
 
   if (!snap) return <div className="p-6">Cargando…</div>;
 
@@ -17,12 +19,44 @@ export default function AdminPage() {
     setNombre("");
   }
 
+  function openTV() {
+    // Abre en nueva pestaña/ventana
+    const url = new URL('/tv', window.location.origin).toString();
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">
-        Administración del día {date}
-      </h1>
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-4">
+        <h1 className="text-2xl font-bold">Administración del día {date}</h1>
 
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={openTV}
+            className="px-3 py-2 rounded bg-emerald-600 text-white"
+            title="Abrir tablero de TV en nueva pestaña"
+          >
+            Ver TV
+          </button>
+          <button
+            onClick={() => nav('/admin/users')}
+            className="px-3 py-2 rounded bg-slate-700 text-white"
+            title="Administrar operadores/usuarios"
+          >
+            Usuarios
+          </button>
+          <button
+            onClick={() => nav('/Login')}
+            className="px-3 py-2 rounded bg-slate-700 text-white"
+            title="Administrar operadores/usuarios"
+          >
+            Cerrar Sesion
+          </button>
+        </div>
+      </div>
+
+      {/* Crear turno */}
       <div className="mb-6 flex gap-2">
         <input
           value={nombre}
@@ -35,13 +69,13 @@ export default function AdminPage() {
         </button>
       </div>
 
-      {/* AHORA 4 columnas: RECEPCION, BOX, PSICO y FINAL */}
+      {/* 4 columnas: RECEPCION, BOX, PSICO y FINAL */}
       <div className="grid grid-cols-4 gap-6">
         {(["RECEPCION","BOX","PSICO","FINAL"] as Etapa[]).map(et => (
           <div key={et} className="border rounded p-3">
             <h2 className="font-semibold mb-2">Cola {et}</h2>
             <ol className="space-y-2 list-decimal list-inside">
-              {(snap.colas[et] || []).map((t, i) => (
+              {(snap.colas[et] || []).map((t) => (
                 <li key={t.id}>{t.nombre || "—"}</li>
               ))}
               {(snap.colas[et] || []).length === 0 && (
