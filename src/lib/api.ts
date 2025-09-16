@@ -60,8 +60,9 @@ export const OpsApi = {
   attend(ticketId: string) {
     return api.post("/ops/attending", { ticketId }).then(r => r.data);
   },
-  finish(ticketId: string) {
-    return api.post("/ops/finish", { ticketId }).then(r => r.data);
+  // ahora permite destino explícito desde BOX
+  finish(ticketId: string, to?: 'PSICO' | 'CAJERO' | 'FINAL') {
+    return api.post("/ops/finish", { ticketId, to }).then(r => r.data);
   },
   cancel(ticketId: string) {
     return api.post("/ops/cancel", { ticketId }).then(r => r.data);
@@ -83,6 +84,20 @@ export const OpsApi = {
   psyCancel(ticketId: string) {
     return api.post("/ops/psy/cancel", { ticketId }).then(r => r.data);
   },
+
+  // CAJERO
+  callNextCash(date: string) {
+    return api.post("/ops/call-next-cash", { date }).then(r => r.data);
+  },
+  cashAttend(ticketId: string) {
+    return api.post("/ops/cash/attend", { ticketId }).then(r => r.data);
+  },
+  cashCancel(ticketId: string) {
+    return api.post("/ops/cash/cancel", { ticketId }).then(r => r.data);
+  },
+  cashFinish(ticketId: string) {
+    return api.post("/ops/cash/finish", { ticketId }).then(r => r.data);
+  },
 };
 
 // ---------- USERS ----------
@@ -92,7 +107,6 @@ export const UsersApi = {
     return data as Array<{ id: string; email: string; name: string; role: Role; boxNumber: number | null }>;
   },
 
-  // Permitimos boxNumber como number | '' | null en la INTERFAZ para poder pasar lo que viene del input
   async create(u: { email: string; name: string; password: string; role: Role; boxNumber?: number | '' | null }) {
     const body: any = {
       email: u.email,
@@ -103,7 +117,7 @@ export const UsersApi = {
 
     if (u.role === 'BOX_AGENT') {
       const parsed = u.boxNumber === '' || u.boxNumber == null ? NaN : Number(u.boxNumber);
-      if (!Number.isNaN(parsed)) body.boxNumber = parsed; // sólo enviamos si es número
+      if (!Number.isNaN(parsed)) body.boxNumber = parsed;
     }
 
     const { data } = await api.post('/users', body);
@@ -133,4 +147,3 @@ export const UsersApi = {
     return data;
   },
 };
-

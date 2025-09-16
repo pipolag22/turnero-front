@@ -11,7 +11,7 @@ export default function PuestoPage() {
   const nav = useNavigate();
   const { snap, date } = useColaRealtime();
 
-  // id robusto para comparar con assignedUserId
+ 
   const myUserId =
     (me as any)?.id ??
     (me as any)?.userId ??
@@ -83,6 +83,11 @@ export default function PuestoPage() {
   async function attendPsy()     { if (myCalledPsy) await OpsApi.psyAttend(myCalledPsy.id); }
   async function cancelPsy()     { if (myCalledPsy) await OpsApi.psyCancel(myCalledPsy.id); }
   async function finishPsy()     { if (myAttPsy)    await OpsApi.psyFinish(myAttPsy.id); }
+  // ---- acciones PSICO
+  async function callCash()       { await OpsApi.callNextCash(date); }
+  async function attendCash()     { if (myCalledCash) await OpsApi.cashAttend(myCalledCash.id); }
+  async function cancelCash()     { if (myCalledCash) await OpsApi.cashCancel(myCalledCash.id); }
+  async function finishCash()     { if (myAttCash)    await OpsApi.cashFinish(myAttCash.id); }
 
   // editar nombre en cola 
   async function guardarNombre(t: Turno, nombre: string) {

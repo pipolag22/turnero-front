@@ -11,12 +11,13 @@ type Snapshot = {
   nowServing: Turno | null;
 };
 
-// Títulos por columna
+
 const TITULOS: Record<Etapa, string> = {
   RECEPCION: "Esperando (Recepción)",
   BOX: "Cargando documentación (Box)",
   PSICO: "Psicofísico",
   FINAL: "Retiro / Final",
+  CAJERO: "Retiro / Final",
 };
 
 export default function TVBoard() {
