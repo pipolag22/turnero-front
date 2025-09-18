@@ -1,267 +1,308 @@
-// src/pages/PuestoPage.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useColaRealtime } from "./hooks/useColaRealtime";
-import type { Etapa, Turno } from "@/types";
+import type { Etapa, Turno, Role } from "@/types";
 import { OpsApi, TicketsApi } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { decodeJwt } from "@/lib/decodeJwt";
+
+type Buckets = {
+  waitingRecep: Turno[];
+  waitingRetiro: Turno[];
+  myCalled: Turno | null;
+  myAttending: Turno | null;
+};
 
 export default function PuestoPage() {
   const { me, logout } = useAuth() as any;
   const nav = useNavigate();
-  const { snap, date } = useColaRealtime();
+  const { snap, date, refetch } = useColaRealtime();
 
- 
-  const myUserId =
-    (me as any)?.id ??
-    (me as any)?.userId ??
-    (me as any)?.sub ??
-    null;
+  const token = typeof localStorage !== "undefined" ? localStorage.getItem("token") : null;
+  const jwt = decodeJwt(token);
 
-  
-  const [stage, setStage] = useState<Etapa>("BOX");
-  useEffect(() => {
-    setStage(me?.role === "PSYCHO_AGENT" ? "PSICO" : "BOX");
-  }, [me?.role]);
+  const role: Role =
+    (me?.role as Role | undefined) ??
+    ((jwt?.role as Role) || (Array.isArray(jwt?.roles) ? (jwt?.roles[0] as Role) : undefined)) ??
+    "BOX_AGENT";
 
-  const queueStage: Etapa = stage === "BOX" ? "RECEPCION" : "PSICO";
+  const myUserId: string | null =
+    me?.id ?? me?.userId ?? me?.sub ?? jwt?.id ?? jwt?.userId ?? jwt?.uid ?? jwt?.sub ?? null;
 
-  const {
-    enCola, retornoCola,
-    myCalledBox, myAttBox,
-    myCalledPsy, myAttPsy,
-  } = useMemo(() => {
-    const colas = snap?.colas ?? ({} as Record<Etapa, Turno[]>);
+  const myBox: number | null =
+    (me?.boxNumber as number | null | undefined) ??
+    (typeof jwt?.boxNumber === "number" ? jwt.boxNumber : null);
 
-    const colaVisible = (colas[queueStage] ?? []).filter(t => t.status === "EN_COLA");
-    const finalCola  = (colas["FINAL"] ?? []).filter(t => t.status === "EN_COLA");
+  const buckets: Buckets = useMemo(() => {
+    const colas = (snap?.colas ?? {}) as Record<Etapa, Turno[]>;
 
-    const myBox = me?.boxNumber ?? null;
-    const boxTickets = [...(colas["BOX"] ?? []), ...(colas["FINAL"] ?? [])];
+    if (role === "BOX_AGENT") {
+      const waitingRecep  = (colas.RECEPCION ?? []).filter(t => t.status === "EN_COLA");
+      const waitingRetiro = (colas.FINAL      ?? []).filter(t => t.status === "EN_COLA");
+      const pool = [...(colas.BOX ?? []), ...(colas.FINAL ?? [])];
+      const myCalled =
+        pool.find(t => t.assignedBox === myBox && t.status === "EN_COLA") ?? null;
+      const myAttending =
+        pool.find(t => t.assignedBox === myBox && t.status === "EN_ATENCION") ?? null;
+      return { waitingRecep, waitingRetiro, myCalled, myAttending };
+    }
 
-    const myCalledBox =
-      boxTickets.find(t => t.assignedBox === myBox && t.status === "EN_COLA") || null;
-    const myAttBox =
-      boxTickets.find(t => t.assignedBox === myBox && t.status === "EN_ATENCION") || null;
+    if (role === "PSYCHO_AGENT") {
+      const ps = colas.PSICO ?? [];
+      const waitingRecep: Turno[] = [];
+      const waitingRetiro: Turno[] = [];
+      const myCalled =
+        ps.find(t => t.assignedUserId === myUserId && t.status === "EN_COLA") ?? null;
+      const myAttending =
+        ps.find(t => t.assignedUserId === myUserId && t.status === "EN_ATENCION") ?? null;
+      return { waitingRecep, waitingRetiro, myCalled, myAttending };
+    }
 
-    const psyTickets = colas["PSICO"] ?? [];
-
-    const calledPsy =
-      myUserId != null
-        ? psyTickets.find(t => t.assignedUserId === myUserId && t.status === "EN_COLA") || null
-        : null;
-
-    const attPsy =
-      myUserId != null
-        ? psyTickets.find(t => t.assignedUserId === myUserId && t.status === "EN_ATENCION") || null
-        : null;
-
-    return {
-      enCola: colaVisible,
-      retornoCola: finalCola,
-      myCalledBox,
-      myAttBox,
-      myCalledPsy: calledPsy,
-      myAttPsy: attPsy,
-    };
-  }, [snap, stage, queueStage, me?.boxNumber, myUserId]);
+    // CASHIER_AGENT
+    const cj = colas.CAJERO ?? [];
+    const waitingRecep: Turno[] = [];
+    const waitingRetiro: Turno[] = [];
+    const myCalled =
+      cj.find(t => t.assignedUserId === myUserId && t.status === "EN_COLA") ?? null;
+    const myAttending =
+      cj.find(t => t.assignedUserId === myUserId && t.status === "EN_ATENCION") ?? null;
+    return { waitingRecep, waitingRetiro, myCalled, myAttending };
+  }, [snap, role, myBox, myUserId]);
 
   if (!snap) return <div className="p-6">Cargando…</div>;
 
-  const busyBox = !!myCalledBox || !!myAttBox;
-  const busyPsy = !!myCalledPsy || !!myAttPsy;
+  const openTV = () => window.open(new URL("/tv", window.location.origin).toString(), "_blank", "noopener,noreferrer");
+  const doLogout = () => { try { logout?.(); } catch {} localStorage.removeItem("token"); nav("/login"); };
 
-  // ---- acciones BOX / FINAL
-  async function callRecepcion() { await OpsApi.callNextLic(date); }
-  async function callRetorno()   { await OpsApi.callNextRet(date); }
-  async function attendBox()     { if (myCalledBox) await OpsApi.attend(myCalledBox.id); }
-  async function finishBox()     { if (myAttBox)    await OpsApi.finish(myAttBox.id); }
-  async function cancelBox()     { if (myCalledBox) await OpsApi.cancel(myCalledBox.id); }
-
-  // ---- acciones PSICO
-  async function callPsy()       { await OpsApi.callNextPsy(date); }
-  async function attendPsy()     { if (myCalledPsy) await OpsApi.psyAttend(myCalledPsy.id); }
-  async function cancelPsy()     { if (myCalledPsy) await OpsApi.psyCancel(myCalledPsy.id); }
-  async function finishPsy()     { if (myAttPsy)    await OpsApi.psyFinish(myAttPsy.id); }
-  // ---- acciones PSICO
-  async function callCash()       { await OpsApi.callNextCash(date); }
-  async function attendCash()     { if (myCalledCash) await OpsApi.cashAttend(myCalledCash.id); }
-  async function cancelCash()     { if (myCalledCash) await OpsApi.cashCancel(myCalledCash.id); }
-  async function finishCash()     { if (myAttCash)    await OpsApi.cashFinish(myAttCash.id); }
-
-  // editar nombre en cola 
-  async function guardarNombre(t: Turno, nombre: string) {
+  const guardarNombre = async (t: Turno, nombre: string) => {
     const nuevo = (nombre || "").trim();
     if ((t.nombre || "") === nuevo) return;
     await TicketsApi.patch(t.id, { nombre: nuevo });
-  }
+    await refetch();
+  };
 
-  // abrir TV en una pestaña nueva
-  function openTV() {
-    const url = new URL('/tv', window.location.origin).toString();
-    window.open(url, '_blank', 'noopener,noreferrer');
-  }
+  const withSync = (fn: () => Promise<any>) => async () => {
+    try { await fn(); }
+    catch (e: any) {
+      const msg = e?.response?.data?.message || e?.response?.data || e?.message || "Error";
+      alert(msg);
+      console.warn("Acción fallida:", { msg, e });
+    }
+    finally { await refetch(); }
+  };
 
-  // logout + redirección a /login 
-  function handleLogout() {
-    try { logout?.(); } catch {}
-    localStorage.removeItem('token');
-    nav('/login');
-  }
+  const actions = {
+    // BOX
+    callRecepcion: withSync(async () => { if (role === "BOX_AGENT") await OpsApi.callNextLic(date); }),
+    callRetorno:   withSync(async () => { if (role === "BOX_AGENT") await OpsApi.callNextRet(date); }),
+    attendBox:     withSync(async () => { if (role === "BOX_AGENT" && buckets.myCalled) await OpsApi.attend(buckets.myCalled.id); }),
+    cancelBox:     withSync(async () => { if (role === "BOX_AGENT" && buckets.myCalled) await OpsApi.cancel(buckets.myCalled.id); }),
 
-  const puedeCambiarTab = me?.role === "ADMIN";
+    // ⚠️ nombre correcto: deriveTo
+    deriveTo: (to: 'PSICO'|'CAJERO'|'FINAL') => withSync(async () => {
+      if (role !== "BOX_AGENT" || !buckets.myAttending) return;
+      await OpsApi.boxDerive(buckets.myAttending.id, to);
+    })(),
+
+    // finalizar desde BOX (si está atendiendo en BOX o FINAL)
+    finishFromBox: withSync(async () => {
+      if (role !== "BOX_AGENT" || !buckets.myAttending) return;
+      await OpsApi.boxFinish(buckets.myAttending.id);
+    }),
+
+    // PSICO
+    callPsy:   withSync(async () => { if (role === "PSYCHO_AGENT") await OpsApi.callNextPsy(date); }),
+    psyAttend: withSync(async () => { if (role === "PSYCHO_AGENT" && buckets.myCalled) await OpsApi.psyAttend(buckets.myCalled.id); }),
+    psyCancel: withSync(async () => { if (role === "PSYCHO_AGENT" && buckets.myCalled) await OpsApi.psyCancel(buckets.myCalled.id); }),
+    psyFinish: withSync(async () => { if (role === "PSYCHO_AGENT" && buckets.myAttending) await OpsApi.psyFinish(buckets.myAttending.id); }),
+
+    // CAJERO
+    callCash:   withSync(async () => { if (role === "CASHIER_AGENT") await OpsApi.callNextCashier(date); }),
+    cashAttend: withSync(async () => { if (role === "CASHIER_AGENT" && buckets.myCalled) await OpsApi.cashierAttend(buckets.myCalled.id); }),
+    cashCancel: withSync(async () => { if (role === "CASHIER_AGENT" && buckets.myCalled) await OpsApi.cashierCancel(buckets.myCalled.id); }),
+    cashFinish: withSync(async () => { if (role === "CASHIER_AGENT" && buckets.myAttending) await OpsApi.cashierFinish(buckets.myAttending.id); }),
+  };
+
+  const header =
+    role === "BOX_AGENT" ? { label: "BOX", cls: "bg-blue-600" } :
+    role === "PSYCHO_AGENT" ? { label: "PSICO", cls: "bg-indigo-600" } :
+    { label: "CAJERO", cls: "bg-amber-600" };
 
   return (
-    <div
-      className="p-6 max-w-6xl mx-auto"
-      style={{ fontFamily: "system-ui, sans-serif" }}
-    >
+    <div className="p-6 max-w-6xl mx-auto" style={{ fontFamily: "system-ui, sans-serif" }}>
       <div className="flex items-center gap-2 mb-4">
-        {puedeCambiarTab && (
-          <>
-            <button
-              className={`px-3 py-2 rounded ${stage === "BOX" ? "bg-blue-600 text-white" : "bg-gray-200"}`}
-              onClick={() => setStage("BOX")}
-            >
-              BOX
-            </button>
-            <button
-              className={`px-3 py-2 rounded ${stage === "PSICO" ? "bg-blue-600 text-white" : "bg-gray-200"}`}
-              onClick={() => setStage("PSICO")}
-            >
-              PSICO
-            </button>
-          </>
-        )}
+        <span className={`px-3 py-2 rounded text-white select-none ${header.cls}`}>{header.label}</span>
 
-        {/* Botonera de acción según etapa */}
-        {stage === "BOX" ? (
-          <div className="ml-auto flex items-center gap-2">
-            <button onClick={callRecepcion} className="px-4 py-2 rounded bg-emerald-600 text-white" disabled={busyBox}>
-              Llamar recepción
-            </button>
-            <button onClick={callRetorno} className="px-4 py-2 rounded bg-teal-600 text-white" disabled={busyBox}>
-              Llamar retorno
-            </button>
-
-            {/*  (derecha del todo) */}
-            <div className="flex items-center gap-2 ml-2">
-              <button onClick={openTV} className="px-3 py-2 rounded bg-slate-600 text-white">Ver TV</button>
-              <button onClick={handleLogout} className="px-3 py-2 rounded bg-slate-700 text-white">Cerrar sesión</button>
-            </div>
-          </div>
-        ) : (
-          <div className="ml-auto flex items-center gap-2">
-            <button onClick={callPsy} className="px-4 py-2 rounded bg-emerald-600 text-white" disabled={busyPsy}>
+        <div className="ml-auto flex items-center gap-2">
+          {role === "BOX_AGENT" && (
+            <>
+              <button onClick={actions.callRecepcion} className="px-4 py-2 rounded bg-emerald-600 text-white"
+                disabled={!!(buckets.myCalled || buckets.myAttending)}>
+                Llamar recepción
+              </button>
+              <button onClick={actions.callRetorno} className="px-4 py-2 rounded bg-teal-600 text-white"
+                disabled={!!(buckets.myCalled || buckets.myAttending)}>
+                Llamar retorno
+              </button>
+            </>
+          )}
+          {role === "PSYCHO_AGENT" && (
+            <button onClick={actions.callPsy} className="px-4 py-2 rounded bg-emerald-600 text-white"
+              disabled={!!(buckets.myCalled || buckets.myAttending)}>
               Llamar PSICO
             </button>
-
-            {/*(derecha del todo) */}
-            <div className="flex items-center gap-2 ml-2">
-              <button onClick={openTV} className="px-3 py-2 rounded bg-slate-600 text-white">Ver TV</button>
-              <button onClick={handleLogout} className="px-3 py-2 rounded bg-slate-700 text-white">Cerrar sesión</button>
-            </div>
-          </div>
-        )}
+          )}
+          {role === "CASHIER_AGENT" && (
+            <button onClick={actions.callCash} className="px-4 py-2 rounded bg-emerald-600 text-white"
+              disabled={!!(buckets.myCalled || buckets.myAttending)}>
+              Llamar CAJERO
+            </button>
+          )}
+          <button onClick={openTV} className="px-3 py-2 rounded bg-slate-600 text-white">Ver TV</button>
+          <button onClick={doLogout} className="px-3 py-2 rounded bg-slate-700 text-white">Cerrar sesión</button>
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-6">
-        {/* Lista izquierda */}
-        <div className="col-span-2">
-          <h2 className="text-lg font-semibold mb-2">
-            {stage === "BOX" ? "Recepción (esperando)" : "Psicofísico (esperando)"}
-          </h2>
-
-          <ul className="space-y-2">
-            {enCola.map((t) => (
-              <li key={t.id} className="p-3 rounded border flex items-center gap-2">
-                {stage === "BOX" ? (
-                  <input
-                    defaultValue={t.nombre || ""}
-                    placeholder="Nombre completo…"
-                    onBlur={(e) => guardarNombre(t, e.currentTarget.value)}
-                    className="border rounded px-2 py-1 flex-1"
-                  />
-                ) : (
-                  <div className="flex-1 font-medium">{t.nombre || "—"}</div>
-                )}
-                <span className="text-xs opacity-60">{t.stage}</span>
-              </li>
-            ))}
-            {enCola.length === 0 && (
-              <li className="opacity-60 italic p-3 rounded border">— vacío —</li>
-            )}
-          </ul>
-
-          {stage === "BOX" && (
+        {/* IZQUIERDA: listados de espera */}
+        <div className="col-span-2 space-y-8">
+          {role === "BOX_AGENT" ? (
             <>
-              <h3 className="text-base font-semibold mt-6 mb-2">
-                Retorno a Licencia (FINAL)
-              </h3>
+              <section>
+                <h2 className="text-lg font-semibold mb-2">Recepción (esperando)</h2>
+                <ul className="space-y-2">
+                  {(snap.colas?.RECEPCION ?? []).filter(t => t.status === "EN_COLA").map(t => (
+                    <li key={t.id} className="p-3 rounded border flex items-center gap-2">
+                      <input
+                        defaultValue={t.nombre || ""}
+                        placeholder="Nombre completo…"
+                        onBlur={(e) => guardarNombre(t, e.currentTarget.value)}
+                        className="border rounded px-2 py-1 flex-1"
+                      />
+                      <span className="text-xs opacity-60">{t.stage}</span>
+                    </li>
+                  ))}
+                  {((snap.colas?.RECEPCION ?? []).filter(t => t.status === "EN_COLA").length === 0) && (
+                    <li className="opacity-60 italic p-3 rounded border">— vacío —</li>
+                  )}
+                </ul>
+              </section>
+
+              <section>
+                <h2 className="text-lg font-semibold mb-2">Retiro (esperando)</h2>
+                <ul className="space-y-2">
+                  {(snap.colas?.FINAL ?? []).filter(t => t.status === "EN_COLA" && !t.assignedBox).map(t => (
+                    <li key={t.id} className="p-3 rounded border flex items-center gap-2">
+                      <input
+                        defaultValue={t.nombre || ""}
+                        placeholder="Nombre completo…"
+                        onBlur={(e) => guardarNombre(t, e.currentTarget.value)}
+                        className="border rounded px-2 py-1 flex-1"
+                      />
+                      <span className="text-xs opacity-60">{t.stage}</span>
+                    </li>
+                  ))}
+                  {((snap.colas?.FINAL ?? []).filter(t => t.status === "EN_COLA" && !t.assignedBox).length === 0) && (
+                    <li className="opacity-60 italic p-3 rounded border">— vacío —</li>
+                  )}
+                </ul>
+              </section>
+            </>
+          ) : (
+            <section>
+              <h2 className="text-lg font-semibold mb-2">
+                {role === "PSYCHO_AGENT" ? "Psicofísico (esperando)" : "Cajero (esperando)"}
+              </h2>
               <ul className="space-y-2">
-                {retornoCola.map((t) => (
-                  <li key={t.id} className="p-3 rounded border flex items-center gap-2">
-                    <div className="flex-1 font-medium">{t.nombre || "—"}</div>
-                    <span className="text-xs opacity-60">{t.stage}</span>
-                  </li>
+                {(role === "PSYCHO_AGENT" ? (snap.colas?.PSICO ?? []) : (snap.colas?.CAJERO ?? []))
+                  .filter(t => t.status === "EN_COLA")
+                  .map(t => (
+                    <li key={t.id} className="p-3 rounded border flex items-center gap-2">
+                      <input
+                        defaultValue={t.nombre || ""}
+                        placeholder="Nombre completo…"
+                        onBlur={(e) => guardarNombre(t, e.currentTarget.value)}
+                        className="border rounded px-2 py-1 flex-1"
+                      />
+                      <span className="text-xs opacity-60">{t.stage}</span>
+                    </li>
                 ))}
-                {retornoCola.length === 0 && (
+                {((role === "PSYCHO_AGENT" ? (snap.colas?.PSICO ?? []) : (snap.colas?.CAJERO ?? []))
+                  .filter(t => t.status === "EN_COLA").length === 0) && (
                   <li className="opacity-60 italic p-3 rounded border">— vacío —</li>
                 )}
               </ul>
-            </>
+            </section>
           )}
         </div>
 
-        {/* Panel derecha */}
+        {/* DERECHA: mi puesto */}
         <div>
           <h2 className="text-lg font-semibold mb-2">
-            {stage === "BOX" ? `Mi Box ${me?.boxNumber ?? "—"}` : "Mi puesto PSICO"}
+            {role === "BOX_AGENT" ? `Mi puesto BOX ${myBox ?? "—"}` :
+             role === "PSYCHO_AGENT" ? "Mi puesto PSICO" : "Mi puesto CAJERO"}
           </h2>
-          <div className="p-4 rounded border min-h-[180px] flex flex-col gap-3">
-            {/* BOX */}
-            {stage === "BOX" && myCalledBox && (
+
+          <div className="p-4 rounded border min-h-[220px] flex flex-col gap-3">
+            {buckets.myCalled && (
               <>
                 <div className="text-xs opacity-60">Llamando…</div>
-                <div className="text-lg font-semibold">{myCalledBox.nombre || "—"}</div>
+                <div className="text-lg font-semibold">{buckets.myCalled.nombre || "—"}</div>
                 <div className="flex gap-2">
-                  <button onClick={attendBox} className="px-3 py-1 rounded bg-blue-600 text-white">Atender</button>
-                  <button onClick={cancelBox} className="px-3 py-1 rounded bg-gray-300">Cancelar llamado</button>
+                  {role === "BOX_AGENT" && (
+                    <>
+                      <button onClick={actions.attendBox} className="px-3 py-1 rounded bg-blue-600 text-white">Atender</button>
+                      <button onClick={actions.cancelBox} className="px-3 py-1 rounded bg-gray-300">Cancelar llamado</button>
+                    </>
+                  )}
+                  {role === "PSYCHO_AGENT" && (
+                    <>
+                      <button onClick={actions.psyAttend} className="px-3 py-1 rounded bg-blue-600 text-white">Atender</button>
+                      <button onClick={actions.psyCancel} className="px-3 py-1 rounded bg-gray-300">Cancelar llamado</button>
+                    </>
+                  )}
+                  {role === "CASHIER_AGENT" && (
+                    <>
+                      <button onClick={actions.cashAttend} className="px-3 py-1 rounded bg-blue-600 text-white">Atender</button>
+                      <button onClick={actions.cashCancel} className="px-3 py-1 rounded bg-gray-300">Cancelar llamado</button>
+                    </>
+                  )}
                 </div>
               </>
             )}
-            {stage === "BOX" && myAttBox && (
+
+            {buckets.myAttending && (
               <>
                 <div className="text-xs opacity-60">Atendiendo…</div>
-                <div className="text-lg font-semibold">{myAttBox.nombre || "—"}</div>
-                <button onClick={finishBox} className="self-start px-3 py-1 rounded bg-indigo-600 text-white">
-                  Finalizar
-                </button>
+                <div className="text-lg font-semibold">{buckets.myAttending.nombre || "—"}</div>
+
+                {role === "BOX_AGENT" ? (
+                  <div className="mt-2 space-y-2">
+                    <p className="text-sm mb-1 opacity-70">Derivar a:</p>
+                    <div className="flex flex-wrap gap-2">
+                      <button onClick={() => actions.deriveTo("PSICO")} className="px-3 py-1 rounded bg-indigo-600 text-white">PSICO</button>
+                      <button onClick={() => actions.deriveTo("CAJERO")} className="px-3 py-1 rounded bg-amber-600 text-white">CAJERO</button>
+                      <button onClick={() => actions.deriveTo("FINAL")} className="px-3 py-1 rounded bg-emerald-700 text-white">FINAL</button>
+                    </div>
+                    <div className="pt-2">
+                      <button onClick={actions.finishFromBox} className="px-3 py-1 rounded bg-emerald-700 text-white">
+                        Finalizar (desde BOX)
+                      </button>
+                    </div>
+                  </div>
+                ) : role === "PSYCHO_AGENT" ? (
+                  <div className="mt-2">
+                    <button onClick={actions.psyFinish} className="px-3 py-1 rounded bg-emerald-700 text-white">Finalizar (a FINAL)</button>
+                  </div>
+                ) : (
+                  <div className="mt-2">
+                    <button onClick={actions.cashFinish} className="px-3 py-1 rounded bg-emerald-700 text-white">Finalizar (a FINAL)</button>
+                  </div>
+                )}
               </>
             )}
 
-            {/* PSICO */}
-            {stage === "PSICO" && myCalledPsy && (
-              <>
-                <div className="text-xs opacity-60">Llamando…</div>
-                <div className="text-lg font-semibold">{myCalledPsy.nombre || "—"}</div>
-                <div className="flex gap-2">
-                  <button onClick={attendPsy} className="px-3 py-1 rounded bg-blue-600 text-white">Atender</button>
-                  <button onClick={cancelPsy} className="px-3 py-1 rounded bg-gray-300">Cancelar llamado</button>
-                </div>
-              </>
-            )}
-            {stage === "PSICO" && myAttPsy && (
-              <>
-                <div className="text-xs opacity-60">Atendiendo…</div>
-                <div className="text-lg font-semibold">{myAttPsy.nombre || "—"}</div>
-                <button onClick={finishPsy} className="self-start px-3 py-1 rounded bg-indigo-600 text-white">
-                  Finalizar (a Retiro)
-                </button>
-              </>
-            )}
-
-            {!myCalledBox && !myAttBox && !myCalledPsy && !myAttPsy && (
+            {!buckets.myCalled && !buckets.myAttending && (
               <div className="text-gray-400">— libre —</div>
             )}
           </div>

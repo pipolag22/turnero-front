@@ -1,6 +1,5 @@
-// src/pages/TVBoard.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
-import { TicketsApi } from "@/lib/api";
+import { TicketsApi, AdminApi } from "@/lib/api";
 import { socket, joinPublicRooms } from "@/lib/realtime";
 import { hoyISO } from "@/lib/date";
 import type { Etapa, Turno } from "@/types";
@@ -11,27 +10,42 @@ type Snapshot = {
   nowServing: Turno | null;
 };
 
-
 const TITULOS: Record<Etapa, string> = {
   RECEPCION: "Esperando (Recepción)",
   BOX: "Cargando documentación (Box)",
   PSICO: "Psicofísico",
+  CAJERO: "Caja",
   FINAL: "Retiro / Final",
-  CAJERO: "Retiro / Final",
 };
+
+// 👉 tips rotativos del footer
+const TIPS = [
+  "Mirá tu nombre en la columna correspondiente. Cuando veas Llamando, acercate al Box indicado.",
+  "Traé tu DNI y turno (impreso o en el celular).",
+  "Personas mayores o con movilidad reducida tienen prioridad.",
+  "Consultas generales: acercate primero a Recepción.",
+];
 
 export default function TVBoard() {
   const rootRef = useRef<HTMLDivElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isFs, setIsFs] = useState(false);
 
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const date = useMemo(hoyISO, []);
+
   const [clock, setClock] = useState(() =>
     new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false })
   );
 
-  // reloj
+  // 🔔 overlay de alerta
+  const [alertState, setAlertState] = useState<{ enabled: boolean; text: string }>({ enabled: false, text: "" });
+
+  // 📝 índice del tip actual
+  const [tipIdx, setTipIdx] = useState(0);
+
+  // ============= Reloj =============
   useEffect(() => {
     const id = setInterval(() => {
       setClock(new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false }));
@@ -39,7 +53,19 @@ export default function TVBoard() {
     return () => clearInterval(id);
   }, []);
 
-  // fullscreen helpers
+  // ============= Rotación de TIPs (cada 7s) ============
+  useEffect(() => {
+    if (TIPS.length <= 1) return;
+    const id = setInterval(() => setTipIdx((i) => (i + 1) % TIPS.length), 7000);
+    return () => clearInterval(id);
+  }, []);
+
+  // ============= Traer alerta inicial ============
+  useEffect(() => {
+    AdminApi.getAlert().then(setAlertState).catch(() => {});
+  }, []);
+
+  // ============= Fullscreen helpers =============
   useEffect(() => {
     const onFsChange = () => setIsFs(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", onFsChange);
@@ -72,7 +98,7 @@ export default function TVBoard() {
     else enterFullscreen();
   }
 
-  // snapshot + realtime
+  // ============= Snapshot + realtime =============
   async function refresh() {
     try {
       const s = await TicketsApi.snapshot(date);
@@ -82,34 +108,69 @@ export default function TVBoard() {
     }
   }
 
+  // desbloquear audio con primer interacción (por políticas de autoplay)
   useEffect(() => {
-    refresh();
-    joinPublicRooms();
-    const onSnapshot = (s: Snapshot) => setSnap(s);
-    const onChange = () => refresh();
-
-    socket.on("queue.snapshot", onSnapshot);
-    socket.on("ticket.created", onChange);
-    socket.on("ticket.updated", onChange);
-    socket.on("ticket.called", onChange);
-    socket.on("ticket.finished", onChange);
-    socket.on("now.serving", onChange);
-    socket.on("turno.created", onChange);
-    socket.on("turno.updated", onChange);
-    socket.on("puesto.nowServing", onChange);
-
-    return () => {
-      socket.off("queue.snapshot", onSnapshot);
-      socket.off("ticket.created", onChange);
-      socket.off("ticket.updated", onChange);
-      socket.off("ticket.called", onChange);
-      socket.off("ticket.finished", onChange);
-      socket.off("now.serving", onChange);
-      socket.off("turno.created", onChange);
-      socket.off("turno.updated", onChange);
-      socket.off("puesto.nowServing", onChange);
+    const unlock = () => {
+      const a = audioRef.current;
+      if (!a) return;
+      a.volume = 1;
+      // reproducir y pausar al toque para “habilitar”
+      a.play().then(() => a.pause()).catch(() => {});
+      window.removeEventListener("click", unlock);
+      window.removeEventListener("keydown", unlock);
     };
-  }, [date]);
+    window.addEventListener("click", unlock);
+    window.addEventListener("keydown", unlock);
+    return () => {
+      window.removeEventListener("click", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
+
+  useEffect(() => {
+  refresh();
+  joinPublicRooms();
+
+  const onSnapshot = (s: Snapshot) => setSnap(s);
+  const onChange = () => refresh();
+
+  socket.on("queue.snapshot", onSnapshot);
+  socket.on("ticket.created", onChange);
+  socket.on("ticket.updated", onChange);
+  socket.on("ticket.called", onChange);
+  socket.on("ticket.finished", onChange);
+  socket.on("now.serving", onChange);
+
+  // compat
+  socket.on("turno.created", onChange);
+  socket.on("turno.updated", onChange);
+  socket.on("puesto.nowServing", onChange);
+
+  // ✅ limpiar correctamente
+  return () => {
+    socket.off("queue.snapshot", onSnapshot);
+    socket.off("ticket.created", onChange);
+    socket.off("ticket.updated", onChange);
+    socket.off("ticket.called", onChange);
+    socket.off("ticket.finished", onChange);
+    socket.off("now.serving", onChange);
+    socket.off("turno.created", onChange);
+    socket.off("turno.updated", onChange);
+    socket.off("puesto.nowServing", onChange);
+  };
+}, [date]);
+
+  // ============= Socket alert =============
+  useEffect(() => {
+  const onAlert = (a: { enabled: boolean; text: string }) => setAlertState(a);
+  socket.on("tv.alert", onAlert);
+
+  
+  return () => {
+    socket.off("tv.alert", onAlert);
+  };
+}, []);
+
 
   if (loading || !snap) {
     return (
@@ -135,10 +196,14 @@ export default function TVBoard() {
   const rec = split("RECEPCION");
   const box = split("BOX");
   const psy = split("PSICO");
+  const caj = split("CAJERO");
   const fin = split("FINAL");
 
   return (
-    <div ref={rootRef} className="tv-root">
+    <div ref={rootRef} className={`tv-root ${isFs ? "is-fs" : ""}`}>
+      {/* sonido */}
+      <audio ref={audioRef} src="/sounds/call.mp3" preload="auto" />
+
       {/* estilos embebidos */}
       <style>{`
         :root{
@@ -173,6 +238,7 @@ export default function TVBoard() {
           padding:0 20px;
           gap:12px;
         }
+        .is-fs .tv-header{ box-shadow: inset 0 -1px 0 rgba(255,255,255,.12); }
         .fsbtn{
           background:transparent; color:#fff;
           border:1px solid rgba(255,255,255,.3);
@@ -181,7 +247,6 @@ export default function TVBoard() {
         }
         .fsbtn svg{ width:18px; height:18px; }
 
-        /* Nueva variante: flotante abajo a la derecha */
         .fsfab{
           position: fixed;
           right: 20px;
@@ -189,7 +254,7 @@ export default function TVBoard() {
           z-index: 1000;
           border-radius: 999px;
           padding: 10px 12px;
-          background: rgba(15,26,42,.95);   /* fondo oscuro del header */
+          background: rgba(15,26,42,.95);
           border-color: transparent;
           box-shadow: 0 6px 18px rgba(0,0,0,.25);
         }
@@ -201,12 +266,17 @@ export default function TVBoard() {
         .brand .sub{ font-size:12px; opacity:.9; margin-top:2px; }
 
         .clock{ font-weight:800; font-size:40px; letter-spacing:1px; display:flex; align-items:baseline; gap:8px; }
+        .is-fs .clock{ font-size:56px; } /* reloj más grande en FS */
         .clock span{ font-size:14px; font-weight:600; opacity:.9 }
+
         .right{ text-align:right; white-space:nowrap; font-weight:600; }
-        .right small{ display:block; font-size:12px; opacity:.8; font-weight:500 }
+        .right small{ display:block; font-size:12px; opacity:.85; font-weight:500 }
 
         .tv-content{ height: calc(100vh - var(--header-h) - var(--bottom-h)); padding: 20px; overflow:hidden; }
-        .grid{ height:100%; display:grid; grid-template-columns: repeat(4, 1fr); gap: var(--gap); }
+        .titleline{ margin-bottom:8px; color:#667085; font-weight:600; }
+        .is-fs .titleline{ color:#e5e7eb; filter:drop-shadow(0 1px 0 rgba(0,0,0,.5)); font-size:18px; }
+
+        .grid{ height:100%; display:grid; grid-template-columns: repeat(5, 1fr); gap: var(--gap); }
         .col{ background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px; display:flex; flex-direction:column; min-width:0; overflow:hidden; }
         .col .header{ margin-bottom:8px; }
         .col .et{ font-size:12px; text-transform:uppercase; color:var(--muted); }
@@ -231,7 +301,8 @@ export default function TVBoard() {
         @keyframes blink{ 0%,100% { background:var(--accent); } 50% { background:var(--accent-2); } }
 
         .bottom{ height:var(--bottom-h); background:var(--bg); color:#fff; display:flex; flex-direction:column; justify-content:center; gap:8px; padding: 10px 20px; }
-        .tipline{ font-size:16px; text-align:center; line-height:1.4; }
+        .tipline{ font-size:16px; text-align:center; line-height:1.4; transition: opacity .5s; }
+        .is-fs .tipline{ font-size:18px; }
         .llamando-pill{ background:var(--accent-pill); color:#1f2937; font-weight:800; padding:6px 12px; border-radius:10px; }
         .footer-mini{ text-align:center; font-size:12px; opacity:.85; }
       `}</style>
@@ -255,7 +326,6 @@ export default function TVBoard() {
           <small>Dpto. Tránsito</small>
         </div>
 
-       {/* FAB Pantalla completa — abajo derecha */}
         <button
           className="fsbtn fsfab"
           onClick={toggleFullscreen}
@@ -263,16 +333,12 @@ export default function TVBoard() {
           aria-label={isFs ? "Salir de pantalla completa" : "Pantalla completa"}
         >
           {isFs ? (
-            // icono minimizar
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                d="M14 10h6V4m0 6-6-6M10 14H4v6m6-6-6 6" />
+              <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M14 10h6V4m0 6-6-6M10 14H4v6m6-6-6 6" />
             </svg>
           ) : (
-            // icono maximizar
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                d="M14 4h6v6M10 20H4v-6m10 0h6v6M10 4H4v6" />
+              <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M14 4h6v6M10 20H4v-6m10 0h6v6M10 4H4v6" />
             </svg>
           )}
         </button>
@@ -280,19 +346,17 @@ export default function TVBoard() {
 
       {/* CONTENIDO */}
       <main className="tv-content">
-        <div style={{ marginBottom: 8, color: "#667085" }}>
+        <div className="titleline">
           TURNOS LICENCIA DE CONDUCIR — {snap.date}
         </div>
 
         <div className="grid">
-          {/* RECEPCION */}
           <Columna etapa="RECEPCION" titulo={TITULOS.RECEPCION}>
             <Bloque titulo={`Siguientes (${rec.enCola.length})`}>
               <ListaSimple items={rec.enCola} />
             </Bloque>
           </Columna>
 
-          {/* BOX */}
           <Columna etapa="BOX" titulo={TITULOS.BOX}>
             <Bloque titulo={`Llamando (${box.llamando.length})`}>
               <ListaConBox items={box.llamando} highlight />
@@ -305,7 +369,6 @@ export default function TVBoard() {
             </Bloque>
           </Columna>
 
-          {/* PSICO */}
           <Columna etapa="PSICO" titulo={TITULOS.PSICO}>
             <Bloque titulo={`Llamando (${psy.llamando.length})`}>
               <ListaConBox items={psy.llamando} highlight />
@@ -313,12 +376,23 @@ export default function TVBoard() {
             <Bloque titulo={`Atendiendo (${psy.atendiendo.length})`}>
               <ListaConBox items={psy.atendiendo} />
             </Bloque>
+            <Bloque titulo={`Esperando para Caja (${caj.enCola.length})`}>
+              <ListaSimple items={caj.enCola} />
+            </Bloque>
+          </Columna>
+
+          <Columna etapa="CAJERO" titulo={TITULOS.CAJERO}>
+            <Bloque titulo={`Llamando (${caj.llamando.length})`}>
+              <ListaConUser items={caj.llamando} highlight />
+            </Bloque>
+            <Bloque titulo={`Atendiendo (${caj.atendiendo.length})`}>
+              <ListaConUser items={caj.atendiendo} />
+            </Bloque>
             <Bloque titulo={`Esperando para Retiro (${fin.enCola.length})`}>
               <ListaSimple items={fin.enCola} />
             </Bloque>
           </Columna>
 
-          {/* FINAL */}
           <Columna etapa="FINAL" titulo={TITULOS.FINAL}>
             <Bloque titulo={`Llamando (${fin.llamando.length})`}>
               <ListaConBox items={fin.llamando} highlight />
@@ -332,15 +406,53 @@ export default function TVBoard() {
 
       {/* BOTTOM */}
       <footer className="bottom">
-        <div className="tipline">
-          <strong>Tip:</strong> Mirá tu nombre en la columna correspondiente.
-          Cuando aparezca en <span className="llamando-pill">Llamando</span>,
-          acercate al Box indicado.
-        </div>
-        <div className="footer-mini">
-          desarrollado por Oficina de Cómputo de Granadero Baigorria
-        </div>
+        <div className="tipline">{TIPS[tipIdx]}</div>
+        <div className="footer-mini">desarrollado por Oficina de Cómputo de Granadero Baigorria</div>
       </footer>
+
+      {/* 🔔 OVERLAY DE ALERTA */}
+      {alertState.enabled && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 2000,
+            background: "rgba(255,255,255,0.95)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+          }}
+        >
+          <div
+            style={{
+              position: "relative",
+              width: "min(820px, 90vw)",
+              height: "min(1060px, 88vh)",
+              background: `url(/images/alerta.png) center/contain no-repeat`,
+            }}
+          >
+            <div
+              style={{
+                position: "absolute",
+                left: "50%",
+                transform: "translateX(-50%)",
+                bottom: "8%",
+                width: "84%",
+                textAlign: "center",
+                fontFamily: "system-ui, sans-serif",
+                fontSize: "clamp(18px, 3.4vw, 34px)",
+                fontWeight: 800,
+                color: "#0b1324",
+                textShadow: "0 1px 0 #fff",
+                lineHeight: 1.25,
+              }}
+            >
+              {alertState.text}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -381,7 +493,7 @@ function ListaSimple({ items }: { items: Turno[] }) {
   );
 }
 
-function ListaConBox({ items, highlight = false }: { items: Turno[]; highlight?: boolean; }) {
+function ListaConBox({ items, highlight = false }: { items: Turno[]; highlight?: boolean }) {
   return (
     <ul className="list">
       {items.slice(0, 8).map((t) => (
@@ -389,6 +501,21 @@ function ListaConBox({ items, highlight = false }: { items: Turno[]; highlight?:
           <div style={{ display: "flex", flexDirection: "column" }}>
             <strong>{t.nombre?.trim() || "—"}</strong>
             {t.assignedBox != null && <span className="box">Box {t.assignedBox}</span>}
+          </div>
+        </li>
+      ))}
+      {items.length === 0 && <li className="pill empty">— vacío —</li>}
+    </ul>
+  );
+}
+
+function ListaConUser({ items, highlight = false }: { items: Turno[]; highlight?: boolean }) {
+  return (
+    <ul className="list">
+      {items.slice(0, 8).map((t) => (
+        <li key={t.id} className={`pill ${highlight ? "calling" : ""}`}>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <strong>{t.nombre?.trim() || "—"}</strong>
           </div>
         </li>
       ))}

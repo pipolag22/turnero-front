@@ -1,4 +1,3 @@
-// src/pages/AdminUsers.tsx
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { UsersApi } from "@/lib/api";
@@ -12,7 +11,8 @@ type User = {
   boxNumber: number | null;
 };
 
-const ROLES: Role[] = ["ADMIN", "BOX_AGENT", "PSYCHO_AGENT"];
+// IMPORTANTE: agregamos CASHIER_AGENT para poder crear cajeros
+const ROLES: Role[] = ["ADMIN", "BOX_AGENT", "PSYCHO_AGENT", "CASHIER_AGENT"];
 
 export default function AdminUsers() {
   const nav = useNavigate();
@@ -45,7 +45,8 @@ export default function AdminUsers() {
       name: nName.trim(),
       password: nPass,
       role: nRole,
-      boxNumber: nRole === "BOX_AGENT" ? Number(nBox) || null : null,
+      // boxNumber solo aplica a BOX_AGENT
+      boxNumber: nRole === "BOX_AGENT" ? (nBox === "" ? null : Number(nBox) || null) : null,
     });
     setNEmail(""); setNName(""); setNPass("");
     setNRole("BOX_AGENT"); setNBox(1);
@@ -69,7 +70,6 @@ export default function AdminUsers() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      
       <div className="flex items-center gap-3 mb-6">
         <h1 className="text-2xl font-bold">Administración de usuarios</h1>
         <div className="ml-auto">
@@ -86,19 +86,39 @@ export default function AdminUsers() {
       <div className="border rounded p-3 mb-6">
         <h2 className="font-semibold mb-3">Crear usuario</h2>
         <div className="grid grid-cols-5 gap-2 items-center">
-          <input className="border rounded px-2 py-1" placeholder="Email"
-            value={nEmail} onChange={(e) => setNEmail(e.target.value)} />
-          <input className="border rounded px-2 py-1" placeholder="Nombre"
-            value={nName} onChange={(e) => setNName(e.target.value)} />
-          <input type="password" className="border rounded px-2 py-1" placeholder="Password"
-            value={nPass} onChange={(e) => setNPass(e.target.value)} />
-          <select className="border rounded px-2 py-1"
-            value={nRole} onChange={(e) => setNRole(e.target.value as Role)}>
+          <input
+            className="border rounded px-2 py-1"
+            placeholder="Email"
+            value={nEmail}
+            onChange={(e) => setNEmail(e.target.value)}
+          />
+          <input
+            className="border rounded px-2 py-1"
+            placeholder="Nombre"
+            value={nName}
+            onChange={(e) => setNName(e.target.value)}
+          />
+          <input
+            type="password"
+            className="border rounded px-2 py-1"
+            placeholder="Password"
+            value={nPass}
+            onChange={(e) => setNPass(e.target.value)}
+          />
+          <select
+            className="border rounded px-2 py-1"
+            value={nRole}
+            onChange={(e) => setNRole(e.target.value as Role)}
+          >
             {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
-          <input className="border rounded px-2 py-1" placeholder="Box #"
-            value={nBox} onChange={(e) => setNBox(e.target.value === "" ? "" : Number(e.target.value))}
-            disabled={nRole !== "BOX_AGENT"} />
+          <input
+            className="border rounded px-2 py-1"
+            placeholder="Box #"
+            value={nBox}
+            onChange={(e) => setNBox(e.target.value === "" ? "" : Number(e.target.value))}
+            disabled={nRole !== "BOX_AGENT"}
+          />
         </div>
         <div className="mt-3">
           <button onClick={create} className="px-3 py-2 rounded bg-blue-600 text-white">Crear</button>
@@ -120,12 +140,16 @@ export default function AdminUsers() {
                 <input
                   className="border rounded px-2 py-1"
                   value={u.name || ""}
-                  onChange={(e) => setList(prev => prev.map(p => p.id === u.id ? { ...p, name: e.target.value } : p))}
+                  onChange={(e) =>
+                    setList(prev => prev.map(p => p.id === u.id ? { ...p, name: e.target.value } : p))
+                  }
                 />
                 <select
                   className="border rounded px-2 py-1"
                   value={u.role}
-                  onChange={(e) => setList(prev => prev.map(p => p.id === u.id ? { ...p, role: e.target.value as Role } : p))}
+                  onChange={(e) =>
+                    setList(prev => prev.map(p => p.id === u.id ? { ...p, role: e.target.value as Role } : p))
+                  }
                 >
                   {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>

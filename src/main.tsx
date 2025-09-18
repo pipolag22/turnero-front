@@ -11,8 +11,7 @@ import Login from "./pages/Login";
 import "./index.css";
 import AdminUsers from "./pages/AdminUsers";
 
-// OJO con los roles: en el back son 'ADMIN' | 'BOX_AGENT' | 'PSYCHO_AGENT'
-// No existe "PUESTO". Si querés que entren BOX y PSICO:
+
 const router = createBrowserRouter([
   {
     path: "/admin",
@@ -33,14 +32,14 @@ const router = createBrowserRouter([
   {
     path: "/puesto",
     element: (
-      <ProtectedRoute allow={["ADMIN", "BOX_AGENT", "PSYCHO_AGENT"]}>
+      <ProtectedRoute allow={["ADMIN", "BOX_AGENT", "PSYCHO_AGENT","CASHIER_AGENT"]}>
         <PuestoPage />
       </ProtectedRoute>
     ),
   },
   { path: "/tv", element: <TVBoard /> },   // pública
   { path: "/login", element: <Login /> },
-  // protegé root también (opcional):
+  
   {
     path: "/",
     element: (

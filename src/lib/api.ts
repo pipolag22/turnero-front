@@ -60,12 +60,15 @@ export const OpsApi = {
   attend(ticketId: string) {
     return api.post("/ops/attending", { ticketId }).then(r => r.data);
   },
-  // ahora permite destino explícito desde BOX
-  finish(ticketId: string, to?: 'PSICO' | 'CAJERO' | 'FINAL') {
-    return api.post("/ops/finish", { ticketId, to }).then(r => r.data);
-  },
   cancel(ticketId: string) {
     return api.post("/ops/cancel", { ticketId }).then(r => r.data);
+  },
+  
+  boxDerive(ticketId: string, to: 'PSICO' | 'CAJERO' | 'FINAL') {
+    return api.post("/ops/box/derive", { ticketId, to }).then(r => r.data);
+  },
+  boxFinish(ticketId: string) {
+    return api.post("/ops/box/finish", { ticketId }).then(r => r.data);
   },
 
   // PSICO
@@ -85,19 +88,23 @@ export const OpsApi = {
     return api.post("/ops/psy/cancel", { ticketId }).then(r => r.data);
   },
 
-  // CAJERO
-  callNextCash(date: string) {
-    return api.post("/ops/call-next-cash", { date }).then(r => r.data);
+  // CAJERO — rutas reales del backend
+  callNextCashier(date: string) {
+    return api.post("/ops/cashier/call-next", { date }).then(r => r.data);
   },
-  cashAttend(ticketId: string) {
-    return api.post("/ops/cash/attend", { ticketId }).then(r => r.data);
+  cashierAttend(ticketId: string) {
+    return api.post("/ops/cashier/attend", { ticketId }).then(r => r.data);
   },
-  cashCancel(ticketId: string) {
-    return api.post("/ops/cash/cancel", { ticketId }).then(r => r.data);
+  cashierCancel(ticketId: string) {
+    return api.post("/ops/cashier/cancel", { ticketId }).then(r => r.data);
   },
-  cashFinish(ticketId: string) {
-    return api.post("/ops/cash/finish", { ticketId }).then(r => r.data);
+  cashierFinish(ticketId: string) {
+    return api.post("/ops/cashier/finish", { ticketId }).then(r => r.data);
   },
+  boxFinishReturn(ticketId: string) {
+    return api.post("/ops/box/finish-return", { ticketId }).then(r => r.data);
+  },
+  
 };
 
 // ---------- USERS ----------
@@ -136,6 +143,9 @@ export const UsersApi = {
       const parsed =
         patch.boxNumber === '' || patch.boxNumber == null ? NaN : Number(patch.boxNumber);
       if (!Number.isNaN(parsed)) body.boxNumber = parsed;
+    } else if (patch.boxNumber !== undefined) {
+      // si cambia a otro rol, limpiamos boxNumber
+      body.boxNumber = null;
     }
 
     const { data } = await api.patch(`/users/${id}`, body);
@@ -144,6 +154,28 @@ export const UsersApi = {
 
   async remove(id: string) {
     const { data } = await api.delete(`/users/${id}`);
+    return data;
+  },
+  
+
+
+
+};
+
+// ---------- ADMIN ----------
+export type TvAlert = { enabled: boolean; text: string };
+
+export const AdminApi = {
+  /** Trae el estado actual de la alerta para la TV */
+  async getAlert() {
+    const { data } = await api.get<TvAlert>("/admin/alert");
+    return data;
+  },
+
+  /** Activa/actualiza o desactiva la alerta de la TV */
+  async setAlert(payload: TvAlert) {
+    // backend debería persistir y emitir "tv.alert" por socket
+    const { data } = await api.post<TvAlert>("/admin/alert", payload);
     return data;
   },
 };
