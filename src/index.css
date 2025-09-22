@@ -3,4 +3,27 @@
 @tailwind utilities;
 
 
-:root { color-scheme: light dark; }
+:root {
+  color-scheme: only light;
+}
+
+html, body {
+  background: #f7f9fc;  
+  color: #0b1324;
+}
+
+@media (prefers-color-scheme: dark) {
+  html, body {
+    background: #f7f9fc !important;
+    color: #0b1324 !important;
+  }
+
+  
+  .card, .panel, .col, .pill, input, textarea, select, button {
+    background-color: #ffffff !important;
+    color: #0b1324 !important;
+    border-color: #e5e7eb !important;
+  }
+
+  a { color: #0b57d0 !important; }
+}
