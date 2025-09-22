@@ -6,6 +6,7 @@ import { OpsApi, TicketsApi } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { decodeJwt } from "@/lib/decodeJwt";
 
+/* ---------- tipos auxiliares ---------- */
 type Buckets = {
   waitingRecep: Turno[];
   waitingRetiro: Turno[];
@@ -91,6 +92,7 @@ export default function PuestoPage() {
     await refetch();
   };
 
+  /* ----- helpers de flujo (confirm + sync) ----- */
   const withSync = (fn: () => Promise<any>) => async () => {
     try { await fn(); }
     catch (e: any) {
@@ -101,70 +103,56 @@ export default function PuestoPage() {
     finally { await refetch(); }
   };
 
-// pregunta al usuario y, si acepta, corre la acción con tu wrapper withSync
-const confirmThen = (question: string, fn: () => Promise<any>) =>
-  withSync(async () => {
-    if (!window.confirm(question)) return;
-    await fn();
-  });
-  
+  const confirmThen = (question: string, fn: () => Promise<any>) =>
+    withSync(async () => { if (!window.confirm(question)) return; await fn(); });
+
+  /* ----- NUEVO: llamar un ticket puntual ----- */
+  const callSpecific = (t: Turno) =>
+    withSync(async () => {
+      if (role === "BOX_AGENT")     await OpsApi.boxCall(t.id);
+      else if (role === "PSYCHO_AGENT")  await OpsApi.psyCall(t.id);
+      else                           await OpsApi.cashierCall(t.id);
+    })();
+
   const actions = {
     // BOX
-    callRecepcion: withSync(async () => {
-    if (role === "BOX_AGENT") await OpsApi.callNextLic(date);
-  }),
-  callRetorno: withSync(async () => {
-    if (role === "BOX_AGENT") await OpsApi.callNextRet(date);
-  }),
-  attendBox: withSync(async () => {
-    if (role === "BOX_AGENT" && buckets.myCalled) await OpsApi.attend(buckets.myCalled.id);
-  }),
-  cancelBox: confirmThen("¿Cancelar el llamado actual?", async () => {
-    if (role === "BOX_AGENT" && buckets.myCalled) await OpsApi.cancel(buckets.myCalled.id);
-  }),
+    callRecepcion: withSync(async () => { if (role === "BOX_AGENT") await OpsApi.callNextLic(date); }),
+    callRetorno:   withSync(async () => { if (role === "BOX_AGENT") await OpsApi.callNextRet(date); }),
+    attendBox:     withSync(async () => { if (role === "BOX_AGENT" && buckets.myCalled) await OpsApi.attend(buckets.myCalled.id); }),
+    cancelBox:     confirmThen("¿Cancelar el llamado actual?", async () => {
+                      if (role === "BOX_AGENT" && buckets.myCalled) await OpsApi.cancel(buckets.myCalled.id);
+                    }),
 
-    // Derivar desde BOX
     deriveTo: (to: "PSICO" | "CAJERO") =>
-    confirmThen(
-      `¿Derivar a ${to === "PSICO" ? "Psicofísico" : "Caja"}?`,
-      async () => {
+      confirmThen(`¿Derivar a ${to === "PSICO" ? "Psicofísico" : "Caja"}?`, async () => {
         if (role !== "BOX_AGENT" || !buckets.myAttending) return;
         await OpsApi.boxDerive(buckets.myAttending.id, to);
-      }
-    )(),
+      })(),
 
-    finishFromBox: confirmThen("¿Finalizar el trámite desde BOX?", async () => {
-    if (role !== "BOX_AGENT" || !buckets.myAttending) return;
-    await OpsApi.boxFinish(buckets.myAttending.id);
-  }),
+    finishFromBox: confirmThen("¿Finalizar el trámite?", async () => {
+      if (role !== "BOX_AGENT" || !buckets.myAttending) return;
+      await OpsApi.boxFinish(buckets.myAttending.id);
+    }),
 
     // PSICO
-    callPsy: withSync(async () => {
-    if (role === "PSYCHO_AGENT") await OpsApi.callNextPsy(date);
-  }),
-  psyAttend: withSync(async () => {
-    if (role === "PSYCHO_AGENT" && buckets.myCalled) await OpsApi.psyAttend(buckets.myCalled.id);
-  }),
-  psyCancel: confirmThen("¿Cancelar el llamado actual en PSICO?", async () => {
-    if (role === "PSYCHO_AGENT" && buckets.myCalled) await OpsApi.psyCancel(buckets.myCalled.id);
-  }),
-  psyFinish: confirmThen("¿Finalizar en PSICO?", async () => {
-    if (role === "PSYCHO_AGENT" && buckets.myAttending) await OpsApi.psyFinish(buckets.myAttending.id);
-  }),
+    callPsy:   withSync(async () => { if (role === "PSYCHO_AGENT") await OpsApi.callNextPsy(date); }),
+    psyAttend: withSync(async () => { if (role === "PSYCHO_AGENT" && buckets.myCalled) await OpsApi.psyAttend(buckets.myCalled.id); }),
+    psyCancel: confirmThen("¿Cancelar el llamado actual en PSICO?", async () => {
+      if (role === "PSYCHO_AGENT" && buckets.myCalled) await OpsApi.psyCancel(buckets.myCalled.id);
+    }),
+    psyFinish: confirmThen("¿Finalizar en PSICO?", async () => {
+      if (role === "PSYCHO_AGENT" && buckets.myAttending) await OpsApi.psyFinish(buckets.myAttending.id);
+    }),
 
     // CAJERO
-    callCash: withSync(async () => {
-    if (role === "CASHIER_AGENT") await OpsApi.callNextCashier(date);
-  }),
-  cashAttend: withSync(async () => {
-    if (role === "CASHIER_AGENT" && buckets.myCalled) await OpsApi.cashierAttend(buckets.myCalled.id);
-  }),
-  cashCancel: confirmThen("¿Cancelar el llamado actual en CAJERO?", async () => {
-    if (role === "CASHIER_AGENT" && buckets.myCalled) await OpsApi.cashierCancel(buckets.myCalled.id);
-  }),
-  cashFinish: confirmThen("¿Finalizar en CAJERO?", async () => {
-    if (role === "CASHIER_AGENT" && buckets.myAttending) await OpsApi.cashierFinish(buckets.myAttending.id);
-  }),
+    callCash:   withSync(async () => { if (role === "CASHIER_AGENT") await OpsApi.callNextCashier(date); }),
+    cashAttend: withSync(async () => { if (role === "CASHIER_AGENT" && buckets.myCalled) await OpsApi.cashierAttend(buckets.myCalled.id); }),
+    cashCancel: confirmThen("¿Cancelar el llamado actual en CAJERO?", async () => {
+      if (role === "CASHIER_AGENT" && buckets.myCalled) await OpsApi.cashierCancel(buckets.myCalled.id);
+    }),
+    cashFinish: confirmThen("¿Finalizar en CAJERO?", async () => {
+      if (role === "CASHIER_AGENT" && buckets.myAttending) await OpsApi.cashierFinish(buckets.myAttending.id);
+    }),
   };
 
   const header =
@@ -172,6 +160,7 @@ const confirmThen = (question: string, fn: () => Promise<any>) =>
     role === "PSYCHO_AGENT" ? { label: "PSICO", cls: "bg-indigo-600" } :
     { label: "CAJERO", cls: "bg-amber-600" };
 
+  /* ---------- UI ---------- */
   return (
     <div className="min-h-screen bg-slate-50" style={{ fontFamily: "system-ui, sans-serif" }}>
       <Topbar role={role} myBox={myBox} date={date} onTV={openTV} onLogout={() => doLogout(nav, logout)} />
@@ -211,7 +200,7 @@ const confirmThen = (question: string, fn: () => Promise<any>) =>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* IZQUIERDA: listados de espera */}
+          {/* IZQUIERDA: listados de espera (con botón “Llamar este”) */}
           <div className="lg:col-span-2 space-y-6">
             {role === "BOX_AGENT" ? (
               <>
@@ -219,11 +208,15 @@ const confirmThen = (question: string, fn: () => Promise<any>) =>
                   title="Recepción (esperando)"
                   items={(snap.colas?.RECEPCION ?? []).filter(t => t.status === "EN_COLA")}
                   onBlurName={guardarNombre}
+                  onCall={callSpecific}
+                  callDisabled={!!(buckets.myCalled || buckets.myAttending)}
                 />
                 <WaitList
                   title="Retiro (esperando)"
                   items={(snap.colas?.FINAL ?? []).filter(t => t.status === "EN_COLA" && !t.assignedBox)}
                   onBlurName={guardarNombre}
+                  onCall={callSpecific}
+                  callDisabled={!!(buckets.myCalled || buckets.myAttending)}
                 />
               </>
             ) : (
@@ -232,11 +225,13 @@ const confirmThen = (question: string, fn: () => Promise<any>) =>
                 items={(role === "PSYCHO_AGENT" ? (snap.colas?.PSICO ?? []) : (snap.colas?.CAJERO ?? []))
                   .filter(t => t.status === "EN_COLA")}
                 onBlurName={guardarNombre}
+                onCall={callSpecific}
+                callDisabled={!!(buckets.myCalled || buckets.myAttending)}
               />
             )}
           </div>
 
-          {/* DERECHA: mi puesto */}
+          {/* DERECHA: mi puesto (igual que antes) */}
           <div className="space-y-4">
             <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
               <h2 className="text-lg font-semibold mb-3">
@@ -283,7 +278,6 @@ const confirmThen = (question: string, fn: () => Promise<any>) =>
                         <div className="flex flex-wrap gap-2">
                           <button onClick={() => actions.deriveTo("PSICO")} className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white">PSICO</button>
                           <button onClick={() => actions.deriveTo("CAJERO")} className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white">CAJERO</button>
-                          
                         </div>
                         <button onClick={actions.finishFromBox} className="px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white">
                           Finalizar
@@ -291,11 +285,11 @@ const confirmThen = (question: string, fn: () => Promise<any>) =>
                       </div>
                     ) : role === "PSYCHO_AGENT" ? (
                       <div className="mt-3">
-                        <button onClick={actions.psyFinish} className="px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white">Finalizar </button>
+                        <button onClick={actions.psyFinish} className="px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white">Finalizar</button>
                       </div>
                     ) : (
                       <div className="mt-3">
-                        <button onClick={actions.cashFinish} className="px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white">Finalizar </button>
+                        <button onClick={actions.cashFinish} className="px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white">Finalizar</button>
                       </div>
                     )}
                   </div>
@@ -314,7 +308,6 @@ const confirmThen = (question: string, fn: () => Promise<any>) =>
 }
 
 /* --------- UI helpers --------- */
-
 
 function Topbar({
   role,
@@ -357,10 +350,14 @@ function WaitList({
   title,
   items,
   onBlurName,
+  onCall,
+  callDisabled = false,
 }: {
   title: string;
   items: Turno[];
   onBlurName: (t: Turno, name: string) => void;
+  onCall?: (t: Turno) => void;
+  callDisabled?: boolean;
 }) {
   return (
     <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
@@ -375,6 +372,16 @@ function WaitList({
               className="border border-slate-300 rounded-lg px-2 py-1 flex-1"
             />
             <span className="text-xs opacity-60">{t.stage}</span>
+            {onCall && (
+              <button
+                onClick={() => onCall(t)}
+                disabled={callDisabled}
+                className="ml-2 px-3 py-1.5 rounded-lg border bg-slate-50 hover:bg-slate-100 disabled:opacity-60"
+                title={callDisabled ? "Ya estás llamando/atendiendo" : "Llamar este"}
+              >
+                Llamar este
+              </button>
+            )}
           </li>
         ))}
         {items.length === 0 && (

@@ -14,7 +14,7 @@ export default function AdminPage() {
   // 🔔 Alerta TV
   const [alertEnabled, setAlertEnabled] = useState(false);
   const [alertText, setAlertText] = useState(
-    "El sistema se encuentra temporalmente fuera de servicio. Por favor aguarde instrucciones."
+    "El sistema de santa fe se encuentra temporalmente fuera de servicio. Por favor aguarde instrucciones."
   );
   const [saving, setSaving] = useState(false);
   const [loadingAlert, setLoadingAlert] = useState(true);

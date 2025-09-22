@@ -20,10 +20,10 @@ const TITULOS: Record<Etapa, string> = {
 
 // 👉 tips rotativos del footer
 const TIPS = [
-  "Mirá tu nombre en la columna correspondiente. Cuando veas Llamando, acercate al Box indicado.",
-  "Traé tu DNI y turno (impreso o en el celular).",
-  "Personas mayores o con movilidad reducida tienen prioridad.",
-  "Consultas generales: acercate primero a Recepción.",
+  "Tips: Mirá tu nombre en la columna correspondiente. Cuando veas Llamando, acercate al Box indicado.",
+  "Tips: Traé tu DNI y toda la documentación.",
+  "Tips: Si debes rendir teorico practica el simulador de examen de la provincia de Santa Fe",
+  "Tips: Consultas generales: acercate primero a Recepción.",
 ];
 
 export default function TVBoard() {
@@ -98,6 +98,17 @@ export default function TVBoard() {
     else enterFullscreen();
   }
 
+  // 👉 ir al login (sale de FS si estuviera activado)
+  function goLogin() {
+    if (document.fullscreenElement) {
+      exitFullscreen();
+      // pequeño delay para que salga de FS antes de navegar
+      setTimeout(() => (window.location.href = "/login"), 80);
+    } else {
+      window.location.href = "/login";
+    }
+  }
+
   // ============= Snapshot + realtime =============
   async function refresh() {
     try {
@@ -114,7 +125,6 @@ export default function TVBoard() {
       const a = audioRef.current;
       if (!a) return;
       a.volume = 1;
-      // reproducir y pausar al toque para “habilitar”
       a.play().then(() => a.pause()).catch(() => {});
       window.removeEventListener("click", unlock);
       window.removeEventListener("keydown", unlock);
@@ -128,49 +138,43 @@ export default function TVBoard() {
   }, []);
 
   useEffect(() => {
-  refresh();
-  joinPublicRooms();
+    refresh();
+    joinPublicRooms();
 
-  const onSnapshot = (s: Snapshot) => setSnap(s);
-  const onChange = () => refresh();
+    const onSnapshot = (s: Snapshot) => setSnap(s);
+    const onChange = () => refresh();
 
-  socket.on("queue.snapshot", onSnapshot);
-  socket.on("ticket.created", onChange);
-  socket.on("ticket.updated", onChange);
-  socket.on("ticket.called", onChange);
-  socket.on("ticket.finished", onChange);
-  socket.on("now.serving", onChange);
+    socket.on("queue.snapshot", onSnapshot);
+    socket.on("ticket.created", onChange);
+    socket.on("ticket.updated", onChange);
+    socket.on("ticket.called", onChange);
+    socket.on("ticket.finished", onChange);
+    socket.on("now.serving", onChange);
 
-  // compat
-  socket.on("turno.created", onChange);
-  socket.on("turno.updated", onChange);
-  socket.on("puesto.nowServing", onChange);
+    // compat
+    socket.on("turno.created", onChange);
+    socket.on("turno.updated", onChange);
+    socket.on("puesto.nowServing", onChange);
 
-  // ✅ limpiar correctamente
-  return () => {
-    socket.off("queue.snapshot", onSnapshot);
-    socket.off("ticket.created", onChange);
-    socket.off("ticket.updated", onChange);
-    socket.off("ticket.called", onChange);
-    socket.off("ticket.finished", onChange);
-    socket.off("now.serving", onChange);
-    socket.off("turno.created", onChange);
-    socket.off("turno.updated", onChange);
-    socket.off("puesto.nowServing", onChange);
-  };
-}, [date]);
+    return () => {
+      socket.off("queue.snapshot", onSnapshot);
+      socket.off("ticket.created", onChange);
+      socket.off("ticket.updated", onChange);
+      socket.off("ticket.called", onChange);
+      socket.off("ticket.finished", onChange);
+      socket.off("now.serving", onChange);
+      socket.off("turno.created", onChange);
+      socket.off("turno.updated", onChange);
+      socket.off("puesto.nowServing", onChange);
+    };
+  }, [date]);
 
   // ============= Socket alert =============
   useEffect(() => {
-  const onAlert = (a: { enabled: boolean; text: string }) => setAlertState(a);
-  socket.on("tv.alert", onAlert);
-
-  
-  return () => {
-    socket.off("tv.alert", onAlert);
-  };
-}, []);
-
+    const onAlert = (a: { enabled: boolean; text: string }) => setAlertState(a);
+    socket.on("tv.alert", onAlert);
+    return () => { socket.off("tv.alert", onAlert); };
+  }, []);
 
   if (loading || !snap) {
     return (
@@ -247,6 +251,7 @@ export default function TVBoard() {
         }
         .fsbtn svg{ width:18px; height:18px; }
 
+        /* FAB fullscreen */
         .fsfab{
           position: fixed;
           right: 20px;
@@ -260,13 +265,29 @@ export default function TVBoard() {
         }
         .fsfab:hover{ background:#0b1524; }
 
+        /* FAB login — se oculta en fullscreen */
+        .loginfab{
+          position: fixed;
+          left: 20px;
+          bottom: 20px;
+          z-index: 1000;
+          border-radius: 999px;
+          padding: 10px 14px;
+          background: #334155; /* slate-700 */
+          color:#fff;
+          border: none;
+          box-shadow: 0 6px 18px rgba(0,0,0,.15);
+        }
+        .loginfab:hover{ background:#475569; }
+        .is-fs .loginfab{ display:none; }
+
         .brand{ display:flex; align-items:center; gap:12px; overflow:hidden; }
         .brand img{ width:36px; height:36px; object-fit:contain; border-radius:999px; background:#0b2a4a; }
         .brand .tit{ font-weight:700; white-space:nowrap; }
         .brand .sub{ font-size:12px; opacity:.9; margin-top:2px; }
 
         .clock{ font-weight:800; font-size:40px; letter-spacing:1px; display:flex; align-items:baseline; gap:8px; }
-        .is-fs .clock{ font-size:56px; } /* reloj más grande en FS */
+        .is-fs .clock{ font-size:56px; }
         .clock span{ font-size:14px; font-weight:600; opacity:.9 }
 
         .right{ text-align:right; white-space:nowrap; font-weight:600; }
@@ -311,7 +332,7 @@ export default function TVBoard() {
       <header className="tv-header">
         <div className="brand">
           <img src="images/gb_tu_ciudad.svg" alt="Granadero Baigorria" />
-          <div>
+        <div>
             <div className="tit">Municipalidad de Granadero Baigorria</div>
             <div className="sub">Provincia de Santa Fe</div>
           </div>
@@ -326,6 +347,7 @@ export default function TVBoard() {
           <small>Dpto. Tránsito</small>
         </div>
 
+        {/* FABs */}
         <button
           className="fsbtn fsfab"
           onClick={toggleFullscreen}
@@ -341,6 +363,16 @@ export default function TVBoard() {
               <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M14 4h6v6M10 20H4v-6m10 0h6v6M10 4H4v6" />
             </svg>
           )}
+        </button>
+
+        {/* 👉 Botón Login (se oculta en fullscreen) */}
+        <button
+          className="loginfab"
+          onClick={goLogin}
+          title="Ir al login de operadores"
+          aria-label="Ir al login"
+        >
+          Login
         </button>
       </header>
 

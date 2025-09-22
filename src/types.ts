@@ -34,3 +34,10 @@ export type SnapshotDia = {
   colas: Record<Etapa, Turno[]>;
   nowServing: Turno | null;
 };
+export type TicketRow = {
+  id: string;
+  queueNumber: number;
+  displayName: string | null;
+  assignedBox: number | null;
+  createdAt: string;
+};

@@ -3,7 +3,6 @@ import ReactDOM from "react-dom/client";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./context/ProtectedRoute";
-
 import AdminPage from "./pages/AdminPage";
 import PuestoPage from "./pages/PuestoPage";
 import TVBoard from "./pages/TVBoard";

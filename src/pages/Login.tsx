@@ -191,10 +191,6 @@ export default function Login() {
               <a href="/tv" target="_blank" rel="noreferrer">Ver TV</a>
             </div>
           </div>
-
-          <div className="foot">
-            Tip de prueba: <strong>admin@demo.local</strong> / <strong>admin123</strong>
-          </div>
         </form>
       </main>
     </div>

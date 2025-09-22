@@ -1,32 +1,53 @@
 import { useEffect, useState } from 'react';
-import { api } from '../lib/api';
-import type { Stage, TicketRow } from '../types';
+import { api } from '@/lib/api';
+import type { Etapa, SnapshotDia, TicketRow } from '@/types';
+import { hoyISO } from '@/lib/date';
 
 type Action = {
   label: string;
   onClick: (t: TicketRow) => void | Promise<void>;
-  show?: (t: TicketRow) => boolean; // si querés condicionar por stage/propietario
+  show?: (t: TicketRow) => boolean;
 };
 
 type Props = {
-  stage: Stage;
+  stage: Etapa;          // ✅ usar Etapa (no Stage)
   title?: string;
   refreshMs?: number;
   big?: boolean;
   limit?: number;
-  actions?: Action[]; // 👈 botones por fila
+  actions?: Action[];
 };
 
-export default function QueueList({ stage, title, refreshMs = 4000, big = false, limit = 12, actions = [] }: Props) {
+export default function QueueList({
+  stage,
+  title,
+  refreshMs = 4000,
+  big = false,
+  limit = 12,
+  actions = [],
+}: Props) {
   const [rows, setRows] = useState<TicketRow[]>([]);
   const [loading, setLoading] = useState(false);
 
   async function load() {
     setLoading(true);
     try {
-      const { data } = await api.get<TicketRow[]>('/public/queue', { params: { stage } });
-      setRows(data.slice(0, limit));
-    } finally { setLoading(false); }
+      const date = hoyISO();
+      const { data } = await api.get<SnapshotDia>('/tickets/snapshot', { params: { date } });
+      const list = (data.colas[stage] as any[]) ?? [];
+
+      const mapped: TicketRow[] = list.map((t: any, i: number) => ({
+        id: t.id,
+        queueNumber: (i + 1),                 // si tenés nro real en DB, usalo acá
+        displayName: t.nombre ?? null,
+        assignedBox: t.assignedBox ?? null,
+        createdAt: t.createdAt,
+      }));
+
+      setRows(mapped.slice(0, limit));
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -57,22 +78,41 @@ export default function QueueList({ stage, title, refreshMs = 4000, big = false,
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={actions.length ? 5 : 4} className={`${big ? 'py-6' : 'py-4'} text-center text-gray-500`}>Cargando…</td></tr>
+              <tr>
+                <td
+                  colSpan={actions.length ? 5 : 4}
+                  className={`${big ? 'py-6' : 'py-4'} text-center text-gray-500`}
+                >
+                  Cargando…
+                </td>
+              </tr>
             )}
-            {!loading && rows.map(r => (
+
+            {!loading && rows.map((r) => (
               <tr key={r.id} className="border-t">
-                <td className={`${big ? 'py-3' : 'py-2'} pr-2 font-mono ${big ? 'text-2xl' : ''}`}>{r.queueNumber}</td>
-                <td className={`${big ? 'py-3' : 'py-2'} pr-2 ${big ? 'text-xl' : ''}`}>{r.displayName ?? '—'}</td>
-                <td className={`${big ? 'py-3' : 'py-2'} pr-2 ${big ? 'text-xl' : ''}`}>{r.assignedBox ?? '—'}</td>
-                <td className={`${big ? 'py-3' : 'py-2'} pr-2 ${big ? 'text-xl' : ''}`}>{new Date(r.createdAt).toLocaleTimeString()}</td>
+                <td className={`${big ? 'py-3' : 'py-2'} pr-2 font-mono ${big ? 'text-2xl' : ''}`}>
+                  {r.queueNumber}
+                </td>
+                <td className={`${big ? 'py-3' : 'py-2'} pr-2 ${big ? 'text-xl' : ''}`}>
+                  {r.displayName ?? '—'}
+                </td>
+                <td className={`${big ? 'py-3' : 'py-2'} pr-2 ${big ? 'text-xl' : ''}`}>
+                  {r.assignedBox ?? '—'}
+                </td>
+                <td className={`${big ? 'py-3' : 'py-2'} pr-2 ${big ? 'text-xl' : ''}`}>
+                  {new Date(r.createdAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                </td>
+
                 {actions.length > 0 && (
                   <td className={`${big ? 'py-3' : 'py-2'}`}>
                     <div className="flex flex-wrap gap-2">
                       {actions.map((a, i) =>
                         (a.show?.(r) ?? true) && (
-                          <button key={i}
-                                  onClick={() => a.onClick(r)}
-                                  className="text-xs px-2 py-1 border rounded hover:bg-gray-50">
+                          <button
+                            key={i}
+                            onClick={() => a.onClick(r)}
+                            className="text-xs px-2 py-1 border rounded hover:bg-gray-50"
+                          >
                             {a.label}
                           </button>
                         )
@@ -82,8 +122,16 @@ export default function QueueList({ stage, title, refreshMs = 4000, big = false,
                 )}
               </tr>
             ))}
+
             {!loading && rows.length === 0 && (
-              <tr><td colSpan={actions.length ? 5 : 4} className={`${big ? 'py-6' : 'py-4'} text-center text-gray-400`}>Sin datos</td></tr>
+              <tr>
+                <td
+                  colSpan={actions.length ? 5 : 4}
+                  className={`${big ? 'py-6' : 'py-4'} text-center text-gray-400`}
+                >
+                  Sin datos
+                </td>
+              </tr>
             )}
           </tbody>
         </table>

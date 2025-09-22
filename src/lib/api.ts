@@ -50,20 +50,25 @@ export const TicketsApi = {
 
 // ---------- OPS ----------
 export const OpsApi = {
-  // BOX / FINAL
+  // --- BOX / FINAL ---
   callNextLic(date: string) {
     return api.post("/ops/call-next-lic", { date }).then(r => r.data);
   },
   callNextRet(date: string) {
     return api.post("/ops/call-next-ret", { date }).then(r => r.data);
   },
+  // NUEVO: llamar un turno puntual a BOX
+  boxCall(ticketId: string) {
+    return api.post("/ops/box/call", { ticketId }).then(r => r.data);
+  },
+
   attend(ticketId: string) {
     return api.post("/ops/attending", { ticketId }).then(r => r.data);
   },
   cancel(ticketId: string) {
     return api.post("/ops/cancel", { ticketId }).then(r => r.data);
   },
-  
+
   boxDerive(ticketId: string, to: 'PSICO' | 'CAJERO' | 'FINAL') {
     return api.post("/ops/box/derive", { ticketId, to }).then(r => r.data);
   },
@@ -71,10 +76,11 @@ export const OpsApi = {
     return api.post("/ops/box/finish", { ticketId }).then(r => r.data);
   },
 
-  // PSICO
+  // --- PSICO ---
   callNextPsy(date: string) {
     return api.post("/ops/call-next-psy", { date }).then(r => r.data);
   },
+  // ya lo tenías, lo mantenemos
   psyCall(ticketId: string) {
     return api.post("/ops/psy/call", { ticketId }).then(r => r.data);
   },
@@ -88,9 +94,13 @@ export const OpsApi = {
     return api.post("/ops/psy/cancel", { ticketId }).then(r => r.data);
   },
 
-  // CAJERO — rutas reales del backend
+  // --- CAJERO ---
   callNextCashier(date: string) {
     return api.post("/ops/cashier/call-next", { date }).then(r => r.data);
+  },
+  // NUEVO: llamar un turno puntual a CAJERO
+  cashierCall(ticketId: string) {
+    return api.post("/ops/cashier/call", { ticketId }).then(r => r.data);
   },
   cashierAttend(ticketId: string) {
     return api.post("/ops/cashier/attend", { ticketId }).then(r => r.data);
@@ -101,10 +111,11 @@ export const OpsApi = {
   cashierFinish(ticketId: string) {
     return api.post("/ops/cashier/finish", { ticketId }).then(r => r.data);
   },
+
+  // opcional que ya tenías
   boxFinishReturn(ticketId: string) {
     return api.post("/ops/box/finish-return", { ticketId }).then(r => r.data);
   },
-  
 };
 
 // ---------- USERS ----------
@@ -156,10 +167,6 @@ export const UsersApi = {
     const { data } = await api.delete(`/users/${id}`);
     return data;
   },
-  
-
-
-
 };
 
 // ---------- ADMIN ----------
