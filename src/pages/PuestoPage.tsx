@@ -231,7 +231,7 @@ export default function PuestoPage() {
             )}
           </div>
 
-          {/* DERECHA: mi puesto (igual que antes) */}
+          {/* DERECHA: mi puesto  */}
           <div className="space-y-4">
             <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
               <h2 className="text-lg font-semibold mb-3">

@@ -11,7 +11,7 @@ type User = {
   boxNumber: number | null;
 };
 
-// IMPORTANTE: agregamos CASHIER_AGENT para poder crear cajeros
+
 const ROLES: Role[] = ["ADMIN", "BOX_AGENT", "PSYCHO_AGENT", "CASHIER_AGENT"];
 
 export default function AdminUsers() {
@@ -45,7 +45,6 @@ export default function AdminUsers() {
       name: nName.trim(),
       password: nPass,
       role: nRole,
-      // boxNumber solo aplica a BOX_AGENT
       boxNumber: nRole === "BOX_AGENT" ? (nBox === "" ? null : Number(nBox) || null) : null,
     });
     setNEmail(""); setNName(""); setNPass("");

@@ -1,4 +1,3 @@
-// src/lib/realtime.ts
 import { io, Socket } from "socket.io-client";
 
 export const socket: Socket = io("/", {
@@ -7,7 +6,7 @@ export const socket: Socket = io("/", {
   withCredentials: false,
 });
 
-// Rooms públicas por etapa en el modelo nuevo
+// Rooms públicas por etapa 
 export function joinPublicRooms() {
   socket.emit("subscribe", {
     rooms: [

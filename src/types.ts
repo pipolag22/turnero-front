@@ -1,7 +1,6 @@
-// Roles que vienen en el JWT (ALINEADOS con backend)
 export type Role = 'ADMIN' | 'BOX_AGENT' | 'PSYCHO_AGENT' | 'CASHIER_AGENT';
 
-// Lo que decodificamos del JWT (claims)
+
 export type UserMe = {
   id: string;
   email: string;

@@ -10,7 +10,7 @@ type Action = {
 };
 
 type Props = {
-  stage: Etapa;          // ✅ usar Etapa (no Stage)
+  stage: Etapa;          
   title?: string;
   refreshMs?: number;
   big?: boolean;
@@ -38,7 +38,7 @@ export default function QueueList({
 
       const mapped: TicketRow[] = list.map((t: any, i: number) => ({
         id: t.id,
-        queueNumber: (i + 1),                 // si tenés nro real en DB, usalo acá
+        queueNumber: (i + 1),                 
         displayName: t.nombre ?? null,
         assignedBox: t.assignedBox ?? null,
         createdAt: t.createdAt,

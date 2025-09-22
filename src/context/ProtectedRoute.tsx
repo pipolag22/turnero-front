@@ -2,7 +2,7 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "./AuthContext";
 
 type Props = {
-  allow: string[];        // p.ej. ["ADMIN"] o []
+  allow: string[];        
   children: React.ReactNode;
 };
 

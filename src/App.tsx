@@ -36,7 +36,7 @@ export default function App() {
         {/* acceso abierto a la TV */}
         <Route path="/tv" element={<TVBoard />} />
 
-        {/* ejemplo protegido (puede ser ["ADMIN","BOX_AGENT"] según tu JWT) */}
+       
         <Route
           path="/puesto"
           element={

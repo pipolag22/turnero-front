@@ -18,7 +18,6 @@ const TITULOS: Record<Etapa, string> = {
   FINAL: "Retiro / Final",
 };
 
-// 👉 tips rotativos del footer
 const TIPS = [
   "Tips: Mirá tu nombre en la columna correspondiente. Cuando veas Llamando, acercate al Box indicado.",
   "Tips: Traé tu DNI y toda la documentación.",
@@ -98,11 +97,10 @@ export default function TVBoard() {
     else enterFullscreen();
   }
 
-  // 👉 ir al login (sale de FS si estuviera activado)
+  
   function goLogin() {
     if (document.fullscreenElement) {
       exitFullscreen();
-      // pequeño delay para que salga de FS antes de navegar
       setTimeout(() => (window.location.href = "/login"), 80);
     } else {
       window.location.href = "/login";
@@ -119,7 +117,7 @@ export default function TVBoard() {
     }
   }
 
-  // desbloquear audio con primer interacción (por políticas de autoplay)
+  
   useEffect(() => {
     const unlock = () => {
       const a = audioRef.current;

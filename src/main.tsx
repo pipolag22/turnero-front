@@ -36,7 +36,7 @@ const router = createBrowserRouter([
       </ProtectedRoute>
     ),
   },
-  { path: "/tv", element: <TVBoard /> },   // pública
+  { path: "/tv", element: <TVBoard /> },   
   { path: "/login", element: <Login /> },
   
   {

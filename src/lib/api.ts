@@ -57,7 +57,7 @@ export const OpsApi = {
   callNextRet(date: string) {
     return api.post("/ops/call-next-ret", { date }).then(r => r.data);
   },
-  // NUEVO: llamar un turno puntual a BOX
+ 
   boxCall(ticketId: string) {
     return api.post("/ops/box/call", { ticketId }).then(r => r.data);
   },
@@ -80,7 +80,7 @@ export const OpsApi = {
   callNextPsy(date: string) {
     return api.post("/ops/call-next-psy", { date }).then(r => r.data);
   },
-  // ya lo tenías, lo mantenemos
+ 
   psyCall(ticketId: string) {
     return api.post("/ops/psy/call", { ticketId }).then(r => r.data);
   },
@@ -98,7 +98,7 @@ export const OpsApi = {
   callNextCashier(date: string) {
     return api.post("/ops/cashier/call-next", { date }).then(r => r.data);
   },
-  // NUEVO: llamar un turno puntual a CAJERO
+ 
   cashierCall(ticketId: string) {
     return api.post("/ops/cashier/call", { ticketId }).then(r => r.data);
   },
@@ -112,7 +112,7 @@ export const OpsApi = {
     return api.post("/ops/cashier/finish", { ticketId }).then(r => r.data);
   },
 
-  // opcional que ya tenías
+
   boxFinishReturn(ticketId: string) {
     return api.post("/ops/box/finish-return", { ticketId }).then(r => r.data);
   },
@@ -173,15 +173,15 @@ export const UsersApi = {
 export type TvAlert = { enabled: boolean; text: string };
 
 export const AdminApi = {
-  /** Trae el estado actual de la alerta para la TV */
+  
   async getAlert() {
     const { data } = await api.get<TvAlert>("/admin/alert");
     return data;
   },
 
-  /** Activa/actualiza o desactiva la alerta de la TV */
+  
   async setAlert(payload: TvAlert) {
-    // backend debería persistir y emitir "tv.alert" por socket
+    
     const { data } = await api.post<TvAlert>("/admin/alert", payload);
     return data;
   },
