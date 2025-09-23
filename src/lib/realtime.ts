@@ -1,21 +1,24 @@
-import { io, Socket } from "socket.io-client";
+// front/src/lib/realtime.ts
+import { io } from "socket.io-client";
 
-export const socket: Socket = io("/", {
+const WS_URL =
+  import.meta.env.VITE_WS_URL ||
+  (location.port === "5173" ? "http://localhost:3000" : window.location.origin);
+
+export const socket = io(WS_URL, {
   path: "/socket.io",
   transports: ["websocket"],
-  withCredentials: false,
+  withCredentials: true,
+  autoConnect: true,
 });
 
-// Rooms públicas por etapa 
 export function joinPublicRooms() {
-  socket.emit("subscribe", {
-    rooms: [
-      "public:stage:RECEPCION",
-      "public:stage:BOX",
-      "public:stage:PSICO",
-      "public:stage:CAJERO",
-      "public:stage:FINAL",
-      "public:tv",
-    ],
-  });
+  try {
+    socket.emit("join.public");
+  } catch {}
 }
+
+// Re-join automático al reconectar
+socket.on("connect", () => {
+  joinPublicRooms();
+});

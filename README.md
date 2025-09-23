@@ -71,3 +71,4 @@ TV: pantalla pública con turnos y alertas.
 Operadores: BOX, PSICO, CAJERO.
 
 Admin: login y gestión de alertas.
+c

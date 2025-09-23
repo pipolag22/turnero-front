@@ -1,87 +1,110 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
-import type { Etapa, SnapshotDia, Turno } from "../../types";
-import { hoyISO } from "../../lib/date";
-import { TicketsApi } from "../../lib/api";
-import { socket } from "../../lib/realtime";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { TicketsApi } from "@/lib/api";
+import { socket, joinPublicRooms } from "@/lib/realtime";
+import { hoyISO } from "@/lib/date";
+import type { Etapa, Turno } from "@/types";
+
+export type Snapshot = {
+  date: string;
+  colas: Record<Etapa, Turno[]>;
+  nowServing: Turno | null;
+};
 
 export function useColaRealtime() {
   const date = useMemo(hoyISO, []);
-  const [snap, setSnap] = useState<SnapshotDia | null>(null);
+  const [snap, setSnap] = useState<Snapshot | null>(null);
+  const [loading, setLoading] = useState(true);
 
+  // ---- refetch con protección (último gana)
+  const inFlight = useRef<Promise<any> | null>(null);
   const refetch = useCallback(async () => {
-    const s = await TicketsApi.snapshot(date);
-    setSnap(s);
+    const p = TicketsApi.snapshot(date)
+      .then((s) => setSnap(s as any))
+      .finally(() => {
+        if (inFlight.current === p) inFlight.current = null;
+      });
+    inFlight.current = p;
+    await p;
+    setLoading(false);
   }, [date]);
+
+  // ---- debounce de eventos socket
+  const debTimer = useRef<number | null>(null);
+  const debouncedRefetch = useCallback(
+    (ms = 250) => {
+      if (debTimer.current) window.clearTimeout(debTimer.current);
+      debTimer.current = window.setTimeout(() => {
+        refetch();
+        debTimer.current = null;
+      }, ms);
+    },
+    [refetch]
+  );
+
+  // ---- polling cuando no hay socket
+  const pollId = useRef<number | null>(null);
+  const startPolling = useCallback(() => {
+    if (pollId.current) return;
+    pollId.current = window.setInterval(() => {
+      if (!socket.connected) refetch();
+    }, 2000) as unknown as number;
+  }, [refetch]);
+  const stopPolling = useCallback(() => {
+    if (pollId.current) {
+      window.clearInterval(pollId.current);
+      pollId.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     let mounted = true;
 
-    refetch();
+    // 1) primera carga
+    refetch().catch(() => {});
 
-    const onSnapshot = (s: SnapshotDia) => { if (mounted) setSnap(s); };
+    // 2) entrar a rooms
+    joinPublicRooms();
 
-    const onCreated = (t: Turno) => {
+    // 3) listeners socket
+    const onSnapshot = (s: Snapshot) => {
       if (!mounted) return;
-      setSnap((prev) => {
-        if (!prev) return prev;
-        const n: SnapshotDia = { ...prev, colas: { ...prev.colas } };
-        if (t.status !== "FINALIZADO" && t.status !== "CANCELADO") {
-          const key = t.stage as Etapa;
-          const arr = (n.colas[key] ?? []).filter((x) => x.id !== t.id);
-          n.colas[key] = [t, ...arr];
-        }
-        return n;
-      });
+      setSnap(s);
+      setLoading(false);
     };
-
-    const onUpdated = (t: Turno) => {
-      if (!mounted) return;
-      setSnap((prev) => {
-        if (!prev) return prev;
-        const n: SnapshotDia = { ...prev, colas: { ...prev.colas }, nowServing: prev.nowServing };
-
-        (Object.keys(n.colas) as Etapa[]).forEach((k) => {
-          n.colas[k] = (n.colas[k] ?? []).filter((x) => x.id !== t.id);
-        });
-        if (t.status !== "FINALIZADO" && t.status !== "CANCELADO") {
-          const key = t.stage as Etapa;
-          n.colas[key] = [...(n.colas[key] ?? []), t];
-        }
-
-        if (t.status === "EN_ATENCION") n.nowServing = t;
-        else if (n.nowServing?.id === t.id) n.nowServing = null;
-
-        return n;
-      });
-    };
+    const onChange = () => debouncedRefetch(200);
+    const onCalled = () => debouncedRefetch(50);
 
     socket.on("queue.snapshot", onSnapshot);
-    socket.on("ticket.created", onCreated);
-    socket.on("ticket.updated", onUpdated);
-    socket.on("ticket.called", refetch);
-    socket.on("ticket.finished", refetch);
-    socket.on("now.serving", refetch);
+    socket.on("ticket.created", onChange);
+    socket.on("ticket.updated", onChange);
+    socket.on("ticket.finished", onChange);
+    socket.on("ticket.called", onCalled);
+    socket.on("now.serving", onCalled);
+    socket.on("puesto.nowServing", onCalled);
 
-    // compat ES
-    socket.on("turno.created", onCreated);
-    socket.on("turno.updated", onUpdated);
-    socket.on("puesto.nowServing", refetch);
+    // 4) (des)conexión + polling
+    const onConnect = () => stopPolling();
+    const onDisconnect = () => startPolling();
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+    if (!socket.connected) startPolling();
 
     return () => {
       mounted = false;
       socket.off("queue.snapshot", onSnapshot);
+      socket.off("ticket.created", onChange);
+      socket.off("ticket.updated", onChange);
+      socket.off("ticket.finished", onChange);
+      socket.off("ticket.called", onCalled);
+      socket.off("now.serving", onCalled);
+      socket.off("puesto.nowServing", onCalled);
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
 
-      socket.off("ticket.created", onCreated);
-      socket.off("ticket.updated", onUpdated);
-      socket.off("ticket.called", refetch);
-      socket.off("ticket.finished", refetch);
-      socket.off("now.serving", refetch);
-
-      socket.off("turno.created", onCreated);
-      socket.off("turno.updated", onUpdated);
-      socket.off("puesto.nowServing", refetch);
+      stopPolling();
+      if (debTimer.current) window.clearTimeout(debTimer.current);
     };
-  }, [refetch, date]);
+  }, [refetch, debouncedRefetch, startPolling, stopPolling]);
 
-  return { snap, date, refetch };
+  return { snap, date, loading, refetch };
 }

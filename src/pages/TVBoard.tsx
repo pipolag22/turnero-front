@@ -1,3 +1,4 @@
+// front/src/pages/TVBoard.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { TicketsApi, AdminApi } from "@/lib/api";
 import { socket, joinPublicRooms } from "@/lib/realtime";
@@ -28,8 +29,8 @@ const TIPS = [
 export default function TVBoard() {
   const rootRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [isFs, setIsFs] = useState(false);
 
+  const [isFs, setIsFs] = useState(false);
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const date = useMemo(hoyISO, []);
@@ -37,17 +38,50 @@ export default function TVBoard() {
   const [clock, setClock] = useState(() =>
     new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false })
   );
-  const lastCallingCount = useRef(0);
 
-      // función para sonar
-      function ding() {
-        const a = audioRef.current;
-        if (!a) return;
-        a.currentTime = 0;
-        a.volume = 1;
-        a.play().catch(() => {
-        });
-      }
+  // ====== SONIDO: 2 dings por evento, con cola y coalescing ======
+  const dingPending = useRef(0);
+  const dingPlaying = useRef(false);
+  const lastEnqueueAt = useRef(0);
+
+  function wait(ms: number) {
+    return new Promise<void>((r) => setTimeout(r, ms));
+  }
+  function playOnce(): Promise<void> {
+    return new Promise((resolve) => {
+      const a = audioRef.current;
+      if (!a) return resolve();
+      const onEnd = () => {
+        a.removeEventListener("ended", onEnd);
+        resolve();
+      };
+      a.currentTime = 0;
+      a.volume = 1;
+      a.play()
+        .then(() => a.addEventListener("ended", onEnd))
+        .catch(() => setTimeout(resolve, 1200)); // si el navegador bloquea, no trabar la cola
+    });
+  }
+  async function runDingLoop() {
+    dingPlaying.current = true;
+    while (dingPending.current > 0) {
+      dingPending.current--;      // 1 paquete = 2 dings
+      await playOnce();
+      await wait(200);
+      await playOnce();
+      await wait(300);
+    }
+    dingPlaying.current = false;
+  }
+  function enqueueDing() {
+    const now = Date.now();
+    // coalesce: ignorar eventos demasiado seguidos
+    if (now - lastEnqueueAt.current < 500) return;
+    lastEnqueueAt.current = now;
+
+    dingPending.current = Math.min(dingPending.current + 1, 3); // cap en cola
+    if (!dingPlaying.current) runDingLoop();
+  }
 
   // 🔔 overlay de alerta
   const [alertState, setAlertState] = useState<{ enabled: boolean; text: string }>({ enabled: false, text: "" });
@@ -63,7 +97,7 @@ export default function TVBoard() {
     return () => clearInterval(id);
   }, []);
 
-  // ============= Rotación de TIPs (cada 7s) ============
+  // ============= Rotación de TIPs ============
   useEffect(() => {
     if (TIPS.length <= 1) return;
     const id = setInterval(() => setTipIdx((i) => (i + 1) % TIPS.length), 7000);
@@ -108,7 +142,6 @@ export default function TVBoard() {
     else enterFullscreen();
   }
 
-  
   function goLogin() {
     if (document.fullscreenElement) {
       exitFullscreen();
@@ -118,7 +151,7 @@ export default function TVBoard() {
     }
   }
 
-  // ============= Snapshot + realtime =============
+  // ============= Data =============
   async function refresh() {
     try {
       const s = await TicketsApi.snapshot(date);
@@ -128,7 +161,7 @@ export default function TVBoard() {
     }
   }
 
-  
+  // Desbloquear audio tras primera interacción del usuario
   useEffect(() => {
     const unlock = () => {
       const a = audioRef.current;
@@ -146,46 +179,73 @@ export default function TVBoard() {
     };
   }, []);
 
+  // Realtime + fallback
   useEffect(() => {
     refresh();
-    joinPublicRooms();
+
+    const doJoin = () => {
+      try { joinPublicRooms(); } catch {}
+    };
+    doJoin();
+
+    // (opcional) log de eventos
+    const onAny = (ev: string, ...args: unknown[]) => {
+      // console.debug("[TV] socket event:", ev, args?.[0]);
+    };
 
     const onSnapshot = (s: Snapshot) => setSnap(s);
     const onChange = () => refresh();
-    const onCalled = () => { refresh(); ding(); };
 
+    // 👉 sonido al llamar
+    const onCalled = () => { enqueueDing(); refresh(); };
+
+    socket.onAny(onAny);
     socket.on("queue.snapshot", onSnapshot);
     socket.on("ticket.created", onChange);
     socket.on("ticket.updated", onChange);
     socket.on("ticket.called", onCalled);
     socket.on("ticket.finished", onChange);
-    socket.on("now.serving", onChange);
-
-    // compat
+    socket.on("now.serving", onCalled);
     socket.on("turno.created", onChange);
     socket.on("turno.updated", onChange);
-    socket.on("puesto.nowServing", onChange);
+    socket.on("puesto.nowServing", onCalled);
+
+    // Re-join al reconectar + refresh
+    const onConnect = () => {
+      doJoin();
+      refresh();
+    };
+    const onDisconnect = () => { /* nada especial */ };
+    const onConnectError = (_err: any) => { /* nada especial */ };
+
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+    socket.on("connect_error", onConnectError);
+
+    // Fallback: si no llegan eventos, refrescar suave cada 4s
+    const fallback = window.setInterval(() => refresh(), 4000);
 
     return () => {
+      socket.offAny(onAny);
       socket.off("queue.snapshot", onSnapshot);
       socket.off("ticket.created", onChange);
       socket.off("ticket.updated", onChange);
       socket.off("ticket.called", onCalled);
       socket.off("ticket.finished", onChange);
-      socket.off("now.serving", onChange);
+      socket.off("now.serving", onCalled);
       socket.off("turno.created", onChange);
       socket.off("turno.updated", onChange);
-      socket.off("puesto.nowServing", onChange);
+      socket.off("puesto.nowServing", onCalled);
+
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
+      socket.off("connect_error", onConnectError);
+
+      window.clearInterval(fallback);
     };
   }, [date]);
 
-  // ============= Socket alert =============
-  useEffect(() => {
-    const onAlert = (a: { enabled: boolean; text: string }) => setAlertState(a);
-    socket.on("tv.alert", onAlert);
-    return () => { socket.off("tv.alert", onAlert); };
-  }, []);
-
+  // ---------- guardia de carga ----------
   if (loading || !snap) {
     return (
       <div style={{ padding: 24, fontFamily: "system-ui, sans-serif" }}>
@@ -194,7 +254,7 @@ export default function TVBoard() {
     );
   }
 
-  // helper: separar estados
+  // ---------- helpers de render ----------
   function split(stage: Etapa) {
     const list = snap.colas[stage] || [];
     const llamando = list.filter(
@@ -283,10 +343,9 @@ export default function TVBoard() {
           z-index: 1000;
           border-radius: 999px;
           padhooks: 10px 14px;
-          background: #334155; /* slate-700 */
+          background: #334155;
           color:#fff;
           border: none;
-          box-shadow: 0 6px 18px rgba(0,0,0,.15);
         }
         .loginfab:hover{ background:#475569; }
         .is-fs .loginfab{ display:none; }
@@ -342,7 +401,7 @@ export default function TVBoard() {
       <header className="tv-header">
         <div className="brand">
           <img src="images/gb_tu_ciudad.svg" alt="Granadero Baigorria" />
-        <div>
+          <div>
             <div className="tit">Municipalidad de Granadero Baigorria</div>
             <div className="sub">Provincia de Santa Fe</div>
           </div>
@@ -394,53 +453,53 @@ export default function TVBoard() {
 
         <div className="grid">
           <Columna etapa="RECEPCION" titulo={TITULOS.RECEPCION}>
-            <Bloque titulo={`Siguientes (${rec.enCola.length})`}>
-              <ListaSimple items={rec.enCola} />
+            <Bloque titulo={`Siguientes (${(split("RECEPCION").enCola).length})`}>
+              <ListaSimple items={split("RECEPCION").enCola} />
             </Bloque>
           </Columna>
 
           <Columna etapa="BOX" titulo={TITULOS.BOX}>
-            <Bloque titulo={`Llamando (${box.llamando.length})`}>
-              <ListaConBox items={box.llamando} highlight />
+            <Bloque titulo={`Llamando (${split("BOX").llamando.length})`}>
+              <ListaConBox items={split("BOX").llamando} highlight />
             </Bloque>
-            <Bloque titulo={`Atendiendo (${box.atendiendo.length})`}>
-              <ListaConBox items={box.atendiendo} />
+            <Bloque titulo={`Atendiendo (${split("BOX").atendiendo.length})`}>
+              <ListaConBox items={split("BOX").atendiendo} />
             </Bloque>
-            <Bloque titulo={`Esperando para Psicofísico (${psy.enCola.length})`}>
-              <ListaSimple items={psy.enCola} />
+            <Bloque titulo={`Esperando para Psicofísico (${split("PSICO").enCola.length})`}>
+              <ListaSimple items={split("PSICO").enCola} />
             </Bloque>
           </Columna>
 
           <Columna etapa="PSICO" titulo={TITULOS.PSICO}>
-            <Bloque titulo={`Llamando (${psy.llamando.length})`}>
-              <ListaConBox items={psy.llamando} highlight />
+            <Bloque titulo={`Llamando (${split("PSICO").llamando.length})`}>
+              <ListaConBox items={split("PSICO").llamando} highlight />
             </Bloque>
-            <Bloque titulo={`Atendiendo (${psy.atendiendo.length})`}>
-              <ListaConBox items={psy.atendiendo} />
+            <Bloque titulo={`Atendiendo (${split("PSICO").atendiendo.length})`}>
+              <ListaConBox items={split("PSICO").atendiendo} />
             </Bloque>
-            <Bloque titulo={`Esperando para Caja (${caj.enCola.length})`}>
-              <ListaSimple items={caj.enCola} />
+            <Bloque titulo={`Esperando para Caja (${split("CAJERO").enCola.length})`}>
+              <ListaSimple items={split("CAJERO").enCola} />
             </Bloque>
           </Columna>
 
           <Columna etapa="CAJERO" titulo={TITULOS.CAJERO}>
-            <Bloque titulo={`Llamando (${caj.llamando.length})`}>
-              <ListaConUser items={caj.llamando} highlight />
+            <Bloque titulo={`Llamando (${split("CAJERO").llamando.length})`}>
+              <ListaConUser items={split("CAJERO").llamando} highlight />
             </Bloque>
-            <Bloque titulo={`Atendiendo (${caj.atendiendo.length})`}>
-              <ListaConUser items={caj.atendiendo} />
+            <Bloque titulo={`Atendiendo (${split("CAJERO").atendiendo.length})`}>
+              <ListaConUser items={split("CAJERO").atendiendo} />
             </Bloque>
-            <Bloque titulo={`Esperando para Retiro (${fin.enCola.length})`}>
-              <ListaSimple items={fin.enCola} />
+            <Bloque titulo={`Esperando para Retiro (${split("FINAL").enCola.length})`}>
+              <ListaSimple items={split("FINAL").enCola} />
             </Bloque>
           </Columna>
 
           <Columna etapa="FINAL" titulo={TITULOS.FINAL}>
-            <Bloque titulo={`Llamando (${fin.llamando.length})`}>
-              <ListaConBox items={fin.llamando} highlight />
+            <Bloque titulo={`Llamando (${split("FINAL").llamando.length})`}>
+              <ListaConBox items={split("FINAL").llamando} highlight />
             </Bloque>
-            <Bloque titulo={`Atendiendo (${fin.atendiendo.length})`}>
-              <ListaConBox items={fin.atendiendo} />
+            <Bloque titulo={`Atendiendo (${split("FINAL").atendiendo.length})`}>
+              <ListaConBox items={split("FINAL").atendiendo} />
             </Bloque>
           </Columna>
         </div>
