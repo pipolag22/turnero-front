@@ -37,6 +37,17 @@ export default function TVBoard() {
   const [clock, setClock] = useState(() =>
     new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false })
   );
+  const lastCallingCount = useRef(0);
+
+      // función para sonar
+      function ding() {
+        const a = audioRef.current;
+        if (!a) return;
+        a.currentTime = 0;
+        a.volume = 1;
+        a.play().catch(() => {
+        });
+      }
 
   // 🔔 overlay de alerta
   const [alertState, setAlertState] = useState<{ enabled: boolean; text: string }>({ enabled: false, text: "" });
@@ -141,11 +152,12 @@ export default function TVBoard() {
 
     const onSnapshot = (s: Snapshot) => setSnap(s);
     const onChange = () => refresh();
+    const onCalled = () => { refresh(); ding(); };
 
     socket.on("queue.snapshot", onSnapshot);
     socket.on("ticket.created", onChange);
     socket.on("ticket.updated", onChange);
-    socket.on("ticket.called", onChange);
+    socket.on("ticket.called", onCalled);
     socket.on("ticket.finished", onChange);
     socket.on("now.serving", onChange);
 
@@ -158,7 +170,7 @@ export default function TVBoard() {
       socket.off("queue.snapshot", onSnapshot);
       socket.off("ticket.created", onChange);
       socket.off("ticket.updated", onChange);
-      socket.off("ticket.called", onChange);
+      socket.off("ticket.called", onCalled);
       socket.off("ticket.finished", onChange);
       socket.off("now.serving", onChange);
       socket.off("turno.created", onChange);
@@ -256,7 +268,7 @@ export default function TVBoard() {
           bottom: 20px;
           z-index: 1000;
           border-radius: 999px;
-          padding: 10px 12px;
+          padhooks: 10px 12px;
           background: rgba(15,26,42,.95);
           border-color: transparent;
           box-shadow: 0 6px 18px rgba(0,0,0,.25);
@@ -270,7 +282,7 @@ export default function TVBoard() {
           bottom: 20px;
           z-index: 1000;
           border-radius: 999px;
-          padding: 10px 14px;
+          padhooks: 10px 14px;
           background: #334155; /* slate-700 */
           color:#fff;
           border: none;
