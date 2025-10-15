@@ -22,7 +22,7 @@ const TITULOS: Record<Etapa, string> = {
 const TIPS = [
   "Tips: Mirá tu nombre en la columna correspondiente. Cuando veas Llamando, acercate al Box indicado.",
   "Tips: Traé tu DNI y toda la documentación.",
-  "Tips: Si debes rendir teorico practica el simulador de examen de la provincia de Santa Fe",
+  "Tips: Si debes rendir examen teórico, practicá el simulador de examen de la provincia de Santa Fe",
   "Tips: Consultas generales: acercate primero a Recepción.",
 ];
 
@@ -108,6 +108,48 @@ export default function TVBoard() {
   useEffect(() => {
     AdminApi.getAlert().then(setAlertState).catch(() => {});
   }, []);
+// ============= ALERTA: realtime + fallback polling =============
+useEffect(() => {
+  // 1) escuchar por socket (si existe el evento)
+  const onAlert = (a: { enabled: boolean; text: string }) => setAlertState(a);
+  socket.on("tv.alert", onAlert);
+
+  // 2) polling de respaldo: cada 3s si no hubo cambios recientes
+  let lastText = alertState.text;
+  let lastEnabled = alertState.enabled;
+  const pollId = window.setInterval(async () => {
+    try {
+      const a = await AdminApi.getAlert();
+      // evitar re-renders innecesarios
+      if (a.text !== lastText || a.enabled !== lastEnabled) {
+        lastText = a.text;
+        lastEnabled = a.enabled;
+        setAlertState(a);
+      }
+    } catch {}
+  }, 3000);
+
+  // 3) al volver a la pestaña, refrescar una vez
+  const onVis = async () => {
+    if (document.visibilityState === "visible") {
+      try { setAlertState(await AdminApi.getAlert()); } catch {}
+    }
+  };
+  document.addEventListener("visibilitychange", onVis);
+
+  // 4) al reconectar socket, refrescar una vez
+  const onConnect = async () => {
+    try { setAlertState(await AdminApi.getAlert()); } catch {}
+  };
+  socket.on("connect", onConnect);
+
+  return () => {
+    socket.off("tv.alert", onAlert);
+    socket.off("connect", onConnect);
+    document.removeEventListener("visibilitychange", onVis);
+    window.clearInterval(pollId);
+  };
+}, []); // <- sin deps para que se monte una sola vez
 
   // ============= Fullscreen helpers =============
   useEffect(() => {
@@ -253,10 +295,11 @@ export default function TVBoard() {
       </div>
     );
   }
+const s = snap as Snapshot;
 
   // ---------- helpers de render ----------
   function split(stage: Etapa) {
-    const list = snap.colas[stage] || [];
+    const list = s.colas[stage] || [];
     const llamando = list.filter(
       (t) => t.status === "EN_COLA" && (t.assignedBox != null || t.assignedUserId != null)
     );

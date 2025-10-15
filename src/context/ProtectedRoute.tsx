@@ -1,24 +1,29 @@
+// front/src/context/ProtectedRoute.tsx
 import { Navigate } from "react-router-dom";
 import { useAuth } from "./AuthContext";
+import type { Role } from "@/types";
 
 type Props = {
-  allow: string[];        
+  allow?: Role[];                 
   children: React.ReactNode;
 };
 
-function homeForRole(role?: string) {
+
+function homeForRole(role?: Role) {
   if (role === "ADMIN") return "/admin";
   return "/puesto";
 }
 
-export default function ProtectedRoute({ allow, children }: Props) {
-  const { token, me } = useAuth();
+export default function ProtectedRoute({ allow = [], children }: Props) {
+  const { token, me } = useAuth() as any;
 
-  if (!token || !me) return <Navigate to="/login" replace />;
+  
+  const role = me?.role as Role | undefined;
+  if (!token || !role) return <Navigate to="/login" replace />;
 
- 
-  if (allow.length && !allow.includes(me.role)) {
-    return <Navigate to={homeForRole(me.role)} replace />;
+  
+  if (allow.length > 0 && !allow.includes(role)) {
+    return <Navigate to={homeForRole(role)} replace />;
   }
 
   return <>{children}</>;

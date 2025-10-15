@@ -18,7 +18,7 @@ export function joinPublicRooms() {
   } catch {}
 }
 
-// Re-join automático al reconectar
+
 socket.on("connect", () => {
   joinPublicRooms();
 });
