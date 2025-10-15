@@ -6,7 +6,7 @@ import { useColaRealtime } from "./hooks/useColaRealtime";
 
 // Definimos los tipos para los estados, para más claridad
 type TeoricoStatus = "ACTIVO" | "INACTIVO";
-type PracticoStatus = "NINGUNA" | "PISTA_CHICA" | "PISTA_GRANDE" | "AMBAS";
+type PracticoStatus = "INACTIVO" | "CIRCUITO_AUTOS" | "CIRCUITO_MOTOS" | "SUSPENDIDO_LLUVIA";
 
 // El objeto de estado completo que viene de la API
 type SystemStatus = {
@@ -136,15 +136,15 @@ export default function AdminPage() {
                 disabled={saving}
                 className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 bg-white"
               >
-                <option value="NINGUNA">Ninguna</option>
-                <option value="PISTA_CHICA">Pista Chica</option>
-                <option value="PISTA_GRANDE">Pista Grande</option>
-                <option value="AMBAS">Ambas</option>
+                <option value="INACTIVO">Inactivo</option>
+                <option value="CIRCUITO_AUTOS">Circuito Autos</option>
+                <option value="CIRCUITO_MOTOS">Circuito Motos</option>
+                <option value="SUSPENDIDO_LLUVIA">Suspendido por Lluvia</option>
               </select>
             </div>
           </div>
           <p className="mt-3 text-xs text-slate-500">
-            Recordatorio: Los exámenes se desactivan automáticamente a las 13:00 hs.
+            Recordatorio: El estado se actualiza a "Inactivo" automáticamente a las 13:00 hs.
           </p>
         </section>
 

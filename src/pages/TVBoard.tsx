@@ -9,7 +9,7 @@ type SystemStatus = {
   alertaEnabled: boolean;
   alertaText: string;
   teoricoStatus: "ACTIVO" | "INACTIVO";
-  practicoStatus: "NINGUNA" | "PISTA_CHICA" | "PISTA_GRANDE" | "AMBAS";
+  practicoStatus: "INACTIVO" | "CIRCUITO_AUTOS" | "CIRCUITO_MOTOS" | "SUSPENDIDO_LLUVIA";
 };
 
 type Snapshot = {
@@ -33,15 +33,18 @@ const TIPS = [
   "Tips: Consultas generales: acercate primero a Recepción.",
 ];
 
-// --- NUEVO COMPONENTE AUXILIAR para los indicadores del header ---
+// --- COMPONENTE INDICADOR (CORREGIDO) ---
 function StatusIndicator({ label, status, activeColor = 'bg-green-500' }: { label: string; status: string; activeColor?: string }) {
-  const isActive = status !== 'INACTIVO' && status !== 'NINGUNA';
+  const isInactive = status === 'INACTIVO' || status.includes('SUSPENDIDO');
+  const colorClass = isInactive ? 'bg-red-500' : activeColor;
+  const textToShow = status.replace(/_/g, ' ');
+
   return (
     <div className="hidden lg:flex items-center gap-2 text-white px-3 py-1.5 rounded-lg bg-white/10 border border-white/20">
-      <span className={`w-3 h-3 rounded-full ${isActive ? activeColor : 'bg-red-500'}`}></span>
+      <span className={`w-3 h-3 rounded-full ${colorClass} ${!isInactive ? 'animate-pulse' : ''}`}></span>
       <div className="text-sm font-semibold">
         <div className="leading-tight">{label}</div>
-        <div className="text-xs opacity-80 font-medium leading-tight">{status.replace('_', ' ')}</div>
+        <div className="text-xs opacity-80 font-medium leading-tight">{textToShow}</div>
       </div>
     </div>
   );
@@ -110,32 +113,29 @@ export default function TVBoard() {
   // 📝 índice del tip actual
   const [tipIdx, setTipIdx] = useState(0);
 
-  // ============= Reloj =============
+  // ============= Reloj y Tips =============
   useEffect(() => {
-    const id = setInterval(() => {
+    const clockId = setInterval(() => {
       setClock(new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false }));
     }, 1000);
-    return () => clearInterval(id);
-  }, []);
-
-  // ============= Rotación de TIPs ============
-  useEffect(() => {
-    if (TIPS.length <= 1) return;
-    const id = setInterval(() => setTipIdx((i) => (i + 1) % TIPS.length), 7000);
-    return () => clearInterval(id);
+    const tipId = setInterval(() => setTipIdx((i) => (i + 1) % TIPS.length), 7000);
+    return () => {
+      clearInterval(clockId);
+      clearInterval(tipId);
+    };
   }, []);
 
   // ============= Carga de Estado y Realtime ============
   useEffect(() => {
-    // Escucha el nuevo evento de socket que creamos en el backend
     const onStatusUpdate = (newStatus: SystemStatus) => setStatus(newStatus);
     socket.on('system.status', onStatusUpdate);
     
-    // Pide el estado inicial al cargar la página
-    AdminApi.getStatus().then(setStatus).catch(() => {});
+    const onConnect = () => {
+        AdminApi.getStatus().then(setStatus).catch(() => {});
+        joinPublicRooms();
+    };
 
-    // Al reconectar, también pide el estado
-    const onConnect = () => AdminApi.getStatus().then(setStatus).catch(() => {});
+    AdminApi.getStatus().then(setStatus).catch(() => {});
     socket.on("connect", onConnect);
 
     return () => {
@@ -317,7 +317,7 @@ export default function TVBoard() {
           border-radius:10px; padding:6px 10px;
           cursor:pointer; display:inline-flex; align-items:center; gap:8px;
         }
-        .fsbtn svg{ width:18px; height:18px; }
+        .fsbtn svg{ width:18px; height:18px; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; fill: none; stroke: currentColor; }
         .fsfab{
           position: fixed;
           right: 20px;
@@ -338,6 +338,7 @@ export default function TVBoard() {
           background: #334155;
           color:#fff;
           border: none;
+          padding: 10px 14px;
         }
         .loginfab:hover{ background:#475569; }
         .is-fs .loginfab{ display:none; }
@@ -427,6 +428,7 @@ export default function TVBoard() {
               <ListaSimple items={split("RECEPCION").enCola} />
             </Bloque>
           </Columna>
+
           <Columna etapa="BOX" titulo={TITULOS.BOX}>
             <Bloque titulo={`Llamando (${split("BOX").llamando.length})`}>
               <ListaConBox items={split("BOX").llamando} highlight />
@@ -438,6 +440,7 @@ export default function TVBoard() {
               <ListaSimple items={split("PSICO").enCola} />
             </Bloque>
           </Columna>
+
           <Columna etapa="PSICO" titulo={TITULOS.PSICO}>
             <Bloque titulo={`Llamando (${split("PSICO").llamando.length})`}>
               <ListaConBox items={split("PSICO").llamando} highlight />
@@ -449,6 +452,7 @@ export default function TVBoard() {
               <ListaSimple items={split("CAJERO").enCola} />
             </Bloque>
           </Columna>
+
           <Columna etapa="CAJERO" titulo={TITULOS.CAJERO}>
             <Bloque titulo={`Llamando (${split("CAJERO").llamando.length})`}>
               <ListaConUser items={split("CAJERO").llamando} highlight />
@@ -460,6 +464,7 @@ export default function TVBoard() {
               <ListaSimple items={split("FINAL").enCola} />
             </Bloque>
           </Columna>
+
           <Columna etapa="FINAL" titulo={TITULOS.FINAL}>
             <Bloque titulo={`Llamando (${split("FINAL").llamando.length})`}>
               <ListaConBox items={split("FINAL").llamando} highlight />
