@@ -110,29 +110,32 @@ export default function TVBoard() {
   // 📝 índice del tip actual
   const [tipIdx, setTipIdx] = useState(0);
 
-  // ============= Hooks de Efecto (Reloj, Tips, Fullscreen, etc.) =============
+  // ============= Reloj =============
   useEffect(() => {
-    const clockId = setInterval(() => {
+    const id = setInterval(() => {
       setClock(new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false }));
     }, 1000);
-    const tipId = setInterval(() => setTipIdx((i) => (i + 1) % TIPS.length), 7000);
-    return () => {
-      clearInterval(clockId);
-      clearInterval(tipId);
-    };
+    return () => clearInterval(id);
   }, []);
 
-  // Carga de Estado y Realtime
+  // ============= Rotación de TIPs ============
   useEffect(() => {
+    if (TIPS.length <= 1) return;
+    const id = setInterval(() => setTipIdx((i) => (i + 1) % TIPS.length), 7000);
+    return () => clearInterval(id);
+  }, []);
+
+  // ============= Carga de Estado y Realtime ============
+  useEffect(() => {
+    // Escucha el nuevo evento de socket que creamos en el backend
     const onStatusUpdate = (newStatus: SystemStatus) => setStatus(newStatus);
     socket.on('system.status', onStatusUpdate);
     
-    const onConnect = () => {
-        AdminApi.getStatus().then(setStatus);
-        joinPublicRooms();
-    };
+    // Pide el estado inicial al cargar la página
+    AdminApi.getStatus().then(setStatus).catch(() => {});
 
-    AdminApi.getStatus().then(setStatus);
+    // Al reconectar, también pide el estado
+    const onConnect = () => AdminApi.getStatus().then(setStatus).catch(() => {});
     socket.on("connect", onConnect);
 
     return () => {
@@ -141,7 +144,7 @@ export default function TVBoard() {
     };
   }, []);
 
-  // Fullscreen
+  // ============= Fullscreen helpers =============
   useEffect(() => {
     const onFsChange = () => setIsFs(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", onFsChange);
@@ -160,7 +163,40 @@ export default function TVBoard() {
     };
   }, []);
 
-  // Desbloqueo de audio
+  function enterFullscreen() {
+    const el: any = rootRef.current;
+    if (!el) return;
+    (el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen)?.call(el);
+  }
+  function exitFullscreen() {
+    const doc: any = document;
+    (doc.exitFullscreen || doc.webkitExitFullscreen || doc.msExitFullscreen)?.call(doc);
+  }
+  function toggleFullscreen() {
+    if (document.fullscreenElement) exitFullscreen();
+    else enterFullscreen();
+  }
+
+  function goLogin() {
+    if (document.fullscreenElement) {
+      exitFullscreen();
+      setTimeout(() => (window.location.href = "/login"), 80);
+    } else {
+      window.location.href = "/login";
+    }
+  }
+
+  // ============= Data =============
+  async function refresh() {
+    try {
+      const s = await TicketsApi.snapshot(date);
+      setSnap(s as any);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Desbloquear audio tras primera interacción del usuario
   useEffect(() => {
     const unlock = () => {
       const a = audioRef.current;
@@ -178,16 +214,8 @@ export default function TVBoard() {
     };
   }, []);
 
-  // Realtime de turnos + fallback
+  // Realtime + fallback
   useEffect(() => {
-    async function refresh() {
-      try {
-        const s = await TicketsApi.snapshot(date);
-        setSnap(s as any);
-      } finally {
-        setLoading(false);
-      }
-    }
     refresh();
 
     const doJoin = () => {
@@ -245,34 +273,111 @@ export default function TVBoard() {
     const enCola = list.filter((t) => t.status === "EN_COLA" && t.assignedBox == null && t.assignedUserId == null);
     return { llamando, atendiendo, enCola };
   }
-  
-  function enterFullscreen() {
-    const el: any = rootRef.current;
-    if (!el) return;
-    (el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen)?.call(el);
-  }
-  function exitFullscreen() {
-    const doc: any = document;
-    (doc.exitFullscreen || doc.webkitExitFullscreen || doc.msExitFullscreen)?.call(doc);
-  }
-  function toggleFullscreen() {
-    if (document.fullscreenElement) exitFullscreen();
-    else enterFullscreen();
-  }
-  function goLogin() {
-    if (document.fullscreenElement) {
-      exitFullscreen();
-      setTimeout(() => (window.location.href = "/login"), 80);
-    } else {
-      window.location.href = "/login";
-    }
-  }
 
   return (
     <div ref={rootRef} className={`tv-root ${isFs ? "is-fs" : ""}`}>
       <audio ref={audioRef} src="/sounds/call.mp3" preload="auto" />
+
+      {/* --- ESTILOS ORIGINALES RESTAURADOS --- */}
       <style>{`
-        /* ... (Todos tus estilos CSS largos se mantienen exactamente igual) ... */
+        :root{
+          --bg:#0f1a2a;
+          --brand:#0e1a2a;
+          --panel:#f7f9fc;
+          --card:#ffffff;
+          --muted:#667085;
+          --border:#e5e7eb;
+          --accent:#f5e6a7;
+          --accent-2:#fde68a;
+          --accent-pill:#facc15;
+          --text:#0b1324;
+          --header-h:72px;
+          --bottom-h:88px;
+          --gap:16px;
+        }
+        *{box-sizing:border-box}
+        html, body, #root { height:100%; background:var(--panel); margin:0; }
+        body { overflow:hidden; }
+        .tv-root{ height:100%; display:flex; flex-direction:column; font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif; color:var(--text); }
+        .tv-header{
+          position:relative;
+          height:var(--header-h);
+          background:var(--bg);
+          color:#fff;
+          display:grid;
+          grid-template-columns: 1fr auto 1fr;
+          align-items:center;
+          padding:0 20px;
+          gap:12px;
+        }
+        .is-fs .tv-header{ box-shadow: inset 0 -1px 0 rgba(255,255,255,.12); }
+        .fsbtn{
+          background:transparent; color:#fff;
+          border:1px solid rgba(255,255,255,.3);
+          border-radius:10px; padding:6px 10px;
+          cursor:pointer; display:inline-flex; align-items:center; gap:8px;
+        }
+        .fsbtn svg{ width:18px; height:18px; }
+        .fsfab{
+          position: fixed;
+          right: 20px;
+          bottom: 20px;
+          z-index: 1000;
+          border-radius: 999px;
+          background: rgba(15,26,42,.95);
+          border-color: transparent;
+          box-shadow: 0 6px 18px rgba(0,0,0,.25);
+        }
+        .fsfab:hover{ background:#0b1524; }
+        .loginfab{
+          position: fixed;
+          left: 20px;
+          bottom: 20px;
+          z-index: 1000;
+          border-radius: 999px;
+          background: #334155;
+          color:#fff;
+          border: none;
+        }
+        .loginfab:hover{ background:#475569; }
+        .is-fs .loginfab{ display:none; }
+        .brand{ display:flex; align-items:center; gap:12px; overflow:hidden; }
+        .brand img{ width:36px; height:36px; object-fit:contain; border-radius:999px; background:#0b2a4a; }
+        .brand .tit{ font-weight:700; white-space:nowrap; }
+        .brand .sub{ font-size:12px; opacity:.9; margin-top:2px; }
+        .clock{ font-weight:800; font-size:40px; letter-spacing:1px; display:flex; align-items:baseline; gap:8px; }
+        .is-fs .clock{ font-size:56px; }
+        .clock span{ font-size:14px; font-weight:600; opacity:.9 }
+        .right{ text-align:right; white-space:nowrap; font-weight:600; }
+        .right small{ display:block; font-size:12px; opacity:.85; font-weight:500 }
+        .tv-content{ height: calc(100vh - var(--header-h) - var(--bottom-h)); padding: 20px; overflow:hidden; }
+        .titleline{ margin-bottom:8px; color:#667085; font-weight:600; }
+        .is-fs .titleline{ color:#e5e7eb; filter:drop-shadow(0 1px 0 rgba(0,0,0,.5)); font-size:18px; }
+        .grid{ height:100%; display:grid; grid-template-columns: repeat(5, 1fr); gap: var(--gap); }
+        .col{ background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px; display:flex; flex-direction:column; min-width:0; overflow:hidden; }
+        .col .header{ margin-bottom:8px; }
+        .col .et{ font-size:12px; text-transform:uppercase; color:var(--muted); }
+        .col .ti{ font-size:18px; font-weight:700; }
+        .block{ margin-top:10px; }
+        .block .bt{ font-size:12px; color:var(--muted); margin-bottom:6px; }
+        ul.list { list-style:none; margin:0; padding:0; overflow:auto; max-height:28vh; }
+        .pill{ padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:#fff; font-weight:600; margin-bottom:8px; }
+        .empty{ color:#98a2b3; font-style:italic; }
+        .calling{
+          background:var(--accent);
+          border:1px solid #f2d783;
+          animation:blink 1.15s ease-in-out infinite;
+          font-size:26px;
+          display:flex; align-items:center; gap:10px;
+        }
+        .calling .box{ font-size:12px; color:#534c2f; font-weight:700; margin-top:4px }
+        .calling strong{ font-weight:800; letter-spacing:0.3px }
+        @keyframes blink{ 0%,100% { background:var(--accent); } 50% { background:var(--accent-2); } }
+        .bottom{ height:var(--bottom-h); background:var(--bg); color:#fff; display:flex; flex-direction:column; justify-content:center; gap:8px; padding: 10px 20px; }
+        .tipline{ font-size:16px; text-align:center; line-height:1.4; transition: opacity .5s; }
+        .is-fs .tipline{ font-size:18px; }
+        .llamando-pill{ background:var(--accent-pill); color:#1f2937; font-weight:800; padding:6px 12px; border-radius:10px; }
+        .footer-mini{ text-align:center; font-size:12px; opacity:.85; }
       `}</style>
 
       {/* --- HEADER MODIFICADO --- */}
@@ -305,7 +410,7 @@ export default function TVBoard() {
         </div>
         
         <button className="fsbtn fsfab" onClick={toggleFullscreen} title={isFs ? "Salir de pantalla completa (Esc)" : "Pantalla completa (F)"} aria-label={isFs ? "Salir de pantalla completa" : "Pantalla completa"}>
-            {/* ... SVG de fullscreen ... */}
+          {isFs ? <svg viewBox="0 0 24 24"><path d="M14 10h6V4m0 6-6-6M10 14H4v6m6-6-6 6" /></svg> : <svg viewBox="0 0 24 24"><path d="M14 4h6v6M10 20H4v-6m10 0h6v6M10 4H4v6" /></svg>}
         </button>
         <button className="loginfab" onClick={goLogin} title="Ir al login de operadores" aria-label="Ir al login">
           Login
@@ -317,19 +422,52 @@ export default function TVBoard() {
           TURNOS LICENCIA DE CONDUCIR — {snap.date}
         </div>
         <div className="grid">
-            {(["RECEPCION", "BOX", "PSICO", "CAJERO", "FINAL"] as Etapa[]).map((etapa) => (
-                <Columna key={etapa} etapa={etapa} titulo={TITULOS[etapa]}>
-                    <Bloque titulo={`Llamando (${split(etapa).llamando.length})`}>
-                        <ListaConBox items={split(etapa).llamando} highlight />
-                    </Bloque>
-                    <Bloque titulo={`Atendiendo (${split(etapa).atendiendo.length})`}>
-                        <ListaConBox items={split(etapa).atendiendo} />
-                    </Bloque>
-                    <Bloque titulo={`Siguientes (${split(etapa).enCola.length})`}>
-                        <ListaSimple items={split(etapa).enCola} />
-                    </Bloque>
-                </Columna>
-            ))}
+          <Columna etapa="RECEPCION" titulo={TITULOS.RECEPCION}>
+            <Bloque titulo={`Siguientes (${(split("RECEPCION").enCola).length})`}>
+              <ListaSimple items={split("RECEPCION").enCola} />
+            </Bloque>
+          </Columna>
+          <Columna etapa="BOX" titulo={TITULOS.BOX}>
+            <Bloque titulo={`Llamando (${split("BOX").llamando.length})`}>
+              <ListaConBox items={split("BOX").llamando} highlight />
+            </Bloque>
+            <Bloque titulo={`Atendiendo (${split("BOX").atendiendo.length})`}>
+              <ListaConBox items={split("BOX").atendiendo} />
+            </Bloque>
+            <Bloque titulo={`Esperando para Psicofísico (${split("PSICO").enCola.length})`}>
+              <ListaSimple items={split("PSICO").enCola} />
+            </Bloque>
+          </Columna>
+          <Columna etapa="PSICO" titulo={TITULOS.PSICO}>
+            <Bloque titulo={`Llamando (${split("PSICO").llamando.length})`}>
+              <ListaConBox items={split("PSICO").llamando} highlight />
+            </Bloque>
+            <Bloque titulo={`Atendiendo (${split("PSICO").atendiendo.length})`}>
+              <ListaConBox items={split("PSICO").atendiendo} />
+            </Bloque>
+            <Bloque titulo={`Esperando para Caja (${split("CAJERO").enCola.length})`}>
+              <ListaSimple items={split("CAJERO").enCola} />
+            </Bloque>
+          </Columna>
+          <Columna etapa="CAJERO" titulo={TITULOS.CAJERO}>
+            <Bloque titulo={`Llamando (${split("CAJERO").llamando.length})`}>
+              <ListaConUser items={split("CAJERO").llamando} highlight />
+            </Bloque>
+            <Bloque titulo={`Atendiendo (${split("CAJERO").atendiendo.length})`}>
+              <ListaConUser items={split("CAJERO").atendiendo} />
+            </Bloque>
+            <Bloque titulo={`Esperando para Retiro (${split("FINAL").enCola.length})`}>
+              <ListaSimple items={split("FINAL").enCola} />
+            </Bloque>
+          </Columna>
+          <Columna etapa="FINAL" titulo={TITULOS.FINAL}>
+            <Bloque titulo={`Llamando (${split("FINAL").llamando.length})`}>
+              <ListaConBox items={split("FINAL").llamando} highlight />
+            </Bloque>
+            <Bloque titulo={`Atendiendo (${split("FINAL").atendiendo.length})`}>
+              <ListaConBox items={split("FINAL").atendiendo} />
+            </Bloque>
+          </Columna>
         </div>
       </main>
 
