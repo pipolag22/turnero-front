@@ -173,16 +173,14 @@ export const UsersApi = {
 export type TvAlert = { enabled: boolean; text: string };
 
 export const AdminApi = {
-  
-  async getAlert() {
-    const { data } = await api.get<TvAlert>("/admin/alert");
+  // Obtenemos el objeto de estado completo
+  async getStatus() {
+    const { data } = await api.get("/admin/status");
     return data;
   },
-
-  
-  async setAlert(payload: TvAlert) {
-    
-    const { data } = await api.post<TvAlert>("/admin/alert", payload);
+  // Enviamos el objeto de estado completo
+  async setStatus(payload: any) {
+    const { data } = await api.post("/admin/status", payload);
     return data;
   },
 };

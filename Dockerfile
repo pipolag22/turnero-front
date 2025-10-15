@@ -11,6 +11,10 @@ ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_WS_URL=$VITE_WS_URL
 
 COPY package*.json ./
+
+# ¡PASO NUEVO! Limpia la caché de NPM antes de instalar
+RUN npm cache clean --force
+
 RUN npm ci
 COPY . .
 RUN npm run build
@@ -18,10 +22,7 @@ RUN npm run build
 # ---- Etapa 2: Servidor (El Auto Completo) ----
 FROM nginx:alpine
 
-# Copia los archivos construidos de la etapa anterior al servidor Nginx
 COPY --from=build /app/dist /usr/share/nginx/html
-
-# Copia la configuración de Nginx
 COPY ./nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
