@@ -1,29 +1,67 @@
+/* src/index.css */
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-
+/* 1. Definimos las variables de colores para ambos temas */
 :root {
-  color-scheme: only light;
-}
-
-html, body {
-  background: #f7f9fc;  
-  color: #0b1324;
-}
-
-@media (prefers-color-scheme: dark) {
-  html, body {
-    background: #f7f9fc !important;
-    color: #0b1324 !important;
-  }
-
+  /* TEMA CLARO (por defecto) */
+  --bg: #f7f9fc;
+  --panel: #ffffff;
+  --card: #ffffff;
+  --text: #0b1324;
+  --muted: #667085;
+  --border: #e5e7eb;
   
-  .card, .panel, .col, .pill, input, textarea, select, button {
-    background-color: #ffffff !important;
-    color: #0b1324 !important;
-    border-color: #e5e7eb !important;
-  }
+  /* Colores del TVBoard (pueden ser diferentes) */
+  --tv-bg: #0f1a2a;
+  --tv-brand: #0e1a2a;
+  --tv-panel: #f7f9fc;
+  --tv-card: #ffffff;
+  --tv-muted: #667085;
+  --tv-border: #e5e7eb;
+  --tv-accent: #f5e6a7;
+  --tv-accent-2: #fde68a;
+  --tv-accent-pill: #facc15;
+  --tv-text: #0b1324;
+  --tv-header-h: 72px;
+  --tv-bottom-h: 88px;
+  --tv-gap: 16px;
+}
 
-  a { color: #0b57d0 !important; }
+/* 2. Aplicamos el tema claro por defecto a toda la aplicación */
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  margin: 0;
+  height: 100%;
+}
+
+html, #root {
+  height: 100%;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* 3. Creamos una clase para activar el tema oscuro del TVBoard */
+.tv-dark-theme {
+  --bg: var(--tv-bg); /* Sobrescribimos las variables base con las del TV */
+  --brand: var(--tv-brand);
+  --panel: var(--tv-panel);
+  --card: var(--tv-card);
+  --muted: var(--tv-muted);
+  --border: var(--tv-border);
+  --accent: var(--tv-accent);
+  --accent-2: var(--tv-accent-2);
+  --accent-pill: var(--tv-accent-pill);
+  --text: var(--tv-text);
+  --header-h: var(--tv-header-h);
+  --bottom-h: var(--tv-bottom-h);
+  --gap: var(--tv-gap);
+  
+  /* Aseguramos que el fondo del body cambie cuando este tema está activo */
+  background-color: var(--bg);
 }

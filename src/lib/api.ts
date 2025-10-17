@@ -30,6 +30,11 @@ export async function loginApi(email: string, password: string) {
 
 // ---------- TICKETS ----------
 export const TicketsApi = {
+
+  async getTvboardSnapshot() {
+    const { data } = await api.get<SnapshotDia>("/public/tvboard");
+    return data;
+  },
   async snapshot(date: string) {
     const { data } = await api.get<SnapshotDia>("/tickets/snapshot", { params: { date } });
     return data;
@@ -181,6 +186,10 @@ export const AdminApi = {
   // Enviamos el objeto de estado completo
   async setStatus(payload: any) {
     const { data } = await api.post("/admin/status", payload);
+    return data;
+  },
+  async getPublicStatus() {
+    const { data } = await api.get("/public/status");
     return data;
   },
 };
