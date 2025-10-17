@@ -1,12 +1,10 @@
-/* src/index.css */
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* 1. Definimos las variables de colores para ambos temas */
+
 :root {
-  /* TEMA CLARO (por defecto) */
   --bg: #f7f9fc;
   --panel: #ffffff;
   --card: #ffffff;
@@ -14,7 +12,7 @@
   --muted: #667085;
   --border: #e5e7eb;
   
-  /* Colores del TVBoard (pueden ser diferentes) */
+  /* Colores del TVBoard  */
   --tv-bg: #0f1a2a;
   --tv-brand: #0e1a2a;
   --tv-panel: #f7f9fc;
@@ -30,7 +28,7 @@
   --tv-gap: 16px;
 }
 
-/* 2. Aplicamos el tema claro por defecto a toda la aplicación */
+
 body {
   background-color: var(--bg);
   color: var(--text);
@@ -46,9 +44,9 @@ html, #root {
   box-sizing: border-box;
 }
 
-/* 3. Creamos una clase para activar el tema oscuro del TVBoard */
+
 .tv-dark-theme {
-  --bg: var(--tv-bg); /* Sobrescribimos las variables base con las del TV */
+  --bg: var(--tv-bg);
   --brand: var(--tv-brand);
   --panel: var(--tv-panel);
   --card: var(--tv-card);
@@ -62,6 +60,6 @@ html, #root {
   --bottom-h: var(--tv-bottom-h);
   --gap: var(--tv-gap);
   
-  /* Aseguramos que el fondo del body cambie cuando este tema está activo */
+
   background-color: var(--bg);
 }
