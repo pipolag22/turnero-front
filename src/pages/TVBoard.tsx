@@ -1,27 +1,19 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { TicketsApi, AdminApi } from "@/lib/api";
 import { socket, joinPublicRooms } from "@/lib/realtime";
-import type { Etapa, Turno } from "@/types";
-
-// Importaciones de los nuevos archivos
-import styles from '../components/tvboard/TVBoard.module.css';
+import { hoyISO } from "@/lib/date";
+import type { Etapa, Turno, SystemStatus } from "@/types"; // Asumo que SystemStatus está en types
+import styles from '../components/tvboard/TVBoard.module.css'; // Asumo que tus estilos están aquí
+// --- ¡IMPORTACIONES CORREGIDAS! ---
 import { useClock } from './hooks/useClock';
 import { useSoundQueue } from './hooks/useSoundQueue';
+// --- FIN DE CORRECCIÓN ---
 import { StatusIndicator } from '../components/tvboard/StatusIndicator';
 import { Columna } from '../components/tvboard/Columna';
 import { Bloque } from '../components/tvboard/Bloque';
 import { ListaSimple } from '../components/tvboard/ListaSimple';
 import { ListaConBox } from '../components/tvboard/ListaConBox';
 import { ListaConUser } from '../components/tvboard/ListaConUser';
-
-
-// Tipos y Constantes específicas de esta página
-type SystemStatus = {
-  alertaEnabled: boolean;
-  alertaText: string;
-  teoricoStatus: "ACTIVO" | "INACTIVO";
-  practicoStatus: "INACTIVO" | "CIRCUITO_AUTOS" | "CIRCUITO_MOTOS" | "SUSPENDIDO_LLUVIA";
-};
 
 type Snapshot = {
   date: string;
@@ -31,7 +23,7 @@ type Snapshot = {
 
 const TITULOS: Record<Etapa, string> = {
   RECEPCION: "Esperando (Recepción)",
-  BOX: "Cargando documentación (Box)",
+  BOX: "BOX",
   PSICO: "Psicofísico",
   CAJERO: "Caja",
   FINAL: "Retiro / Final",
@@ -47,7 +39,7 @@ const TIPS = [
 export default function TVBoard() {
   // --- Refs y Estado ---
   const rootRef = useRef<HTMLDivElement>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
   const [isFs, setIsFs] = useState(false);
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [loading, setLoading] = useState(true);
@@ -66,15 +58,16 @@ export default function TVBoard() {
     return () => clearInterval(tipId);
   }, []);
 
-  // Efecto para cargar el estado del sistema (teórico/práctico)
+  // Efecto para el estado del sistema (Exámenes y Alerta)
   useEffect(() => {
     const onStatusUpdate = (newStatus: SystemStatus) => setStatus(newStatus);
     socket.on('system.status', onStatusUpdate);
-    //const onConnect = () => AdminApi.getStatus().then(setStatus).catch(() => {});
-    const onConnect = () => AdminApi.getPublicStatus().then(setStatus).catch(() => {});
     
+    const onConnect = () => {
+      // Usamos el endpoint público que no requiere autenticación
+      AdminApi.getPublicStatus().then(setStatus).catch(() => {});
+    };
     
-    //AdminApi.getStatus().then(setStatus).catch(() => {});
     AdminApi.getPublicStatus().then(setStatus).catch(() => {});
     socket.on("connect", onConnect);
 
@@ -119,7 +112,7 @@ export default function TVBoard() {
     };
   }, []);
 
-  // Efecto principal para carga de datos y eventos de socket
+  // Efecto principal para carga de datos y eventos de socket de turnos
   useEffect(() => {
     const refresh = async () => {
       try {
@@ -203,6 +196,16 @@ export default function TVBoard() {
     );
   }
 
+  // --- Creamos la lista unificada de espera ---
+  const listaEsperaUnificada = [
+    ...split("PSICO").enCola,
+    ...split("CAJERO").enCola,
+    ...split("FINAL").enCola,
+  ];
+  // Ordenamos por fecha de creación
+  listaEsperaUnificada.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  
+
   return (
     <div ref={rootRef} className={`${styles.tvRoot} tv-dark-theme ${isFs ? styles.isFs : ""}`}>
       <audio ref={audioRef} src="/sounds/call.mp3" preload="auto" />
@@ -227,14 +230,16 @@ export default function TVBoard() {
            </div>
          </div>
          <button className={`${styles.fsbtn} ${styles.fsfab}`} onClick={toggleFullscreen} title={isFs ? "Salir de pantalla completa (Esc)" : "Pantalla completa (F)"}>
-           {isFs ? <svg viewBox="0 0 24 24"><path d="M14 10h6V4m0 6-6-6M10 14H4v6m6-6-6 6" /></svg> : <svg viewBox="0 0 24 24"><path d="M14 4h6v6M10 20H4v-6m10 0h6v6M10 4H4v6" /></svg>}
+           {isFs ? <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M14 10h6V4m0 6-6-6M10 14H4v6m6-6-6 6" /></svg> : <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M14 4h6v6M10 20H4v-6m10 0h6v6M10 4H4v6" /></svg>}
          </button>
          <button className={styles.loginfab} onClick={goLogin} title="Ir al login de operadores">Login</button>
        </header>
 
       <main className={styles.tvContent}>
         <div className={styles.titleline}>TURNOS LICENCIA DE CONDUCIR — {snap.date}</div>
+        
         <div className={styles.grid}>
+          
           <Columna etapa="RECEPCION" titulo={TITULOS.RECEPCION}>
             <Bloque titulo={`Siguientes (${(split("RECEPCION").enCola).length})`}>
               <ListaSimple items={split("RECEPCION").enCola} />
@@ -248,8 +253,8 @@ export default function TVBoard() {
             <Bloque titulo={`Atendiendo (${split("BOX").atendiendo.length})`}>
               <ListaConBox items={split("BOX").atendiendo} />
             </Bloque>
-            <Bloque titulo={`Esperando para Psicofísico (${split("PSICO").enCola.length})`}>
-              <ListaSimple items={split("PSICO").enCola} />
+            <Bloque titulo={`Siguientes en Espera (${listaEsperaUnificada.length})`}>
+              <ListaSimple items={listaEsperaUnificada} />
             </Bloque>
           </Columna>
 
@@ -260,9 +265,6 @@ export default function TVBoard() {
             <Bloque titulo={`Atendiendo (${split("PSICO").atendiendo.length})`}>
               <ListaConBox items={split("PSICO").atendiendo} />
             </Bloque>
-            <Bloque titulo={`Esperando para Caja (${split("CAJERO").enCola.length})`}>
-              <ListaSimple items={split("CAJERO").enCola} />
-            </Bloque>
           </Columna>
 
           <Columna etapa="CAJERO" titulo={TITULOS.CAJERO}>
@@ -271,9 +273,6 @@ export default function TVBoard() {
             </Bloque>
             <Bloque titulo={`Atendiendo (${split("CAJERO").atendiendo.length})`}>
               <ListaConUser items={split("CAJERO").atendiendo} />
-            </Bloque>
-            <Bloque titulo={`Esperando para Retiro (${split("FINAL").enCola.length})`}>
-              <ListaSimple items={split("FINAL").enCola} />
             </Bloque>
           </Columna>
 
@@ -285,6 +284,7 @@ export default function TVBoard() {
               <ListaConBox items={split("FINAL").atendiendo} />
             </Bloque>
           </Columna>
+          
         </div>
       </main>
 
@@ -293,7 +293,8 @@ export default function TVBoard() {
         <div className={styles.footerMini}>desarrollado por Oficina de Cómputo de Granadero Baigorria</div>
       </footer>
 
-      {status.alertaEnabled && (
+      {/* Alerta de Emergencia */}
+      {status?.alertaEnabled && (
         <div style={{ position: "fixed", inset: 0, zIndex: 2000, background: "rgba(255,255,255,0.95)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
           <div style={{ position: "relative", width: "min(820px, 90vw)", height: "min(1060px, 88vh)", background: `url(/images/alerta.png) center/contain no-repeat` }}>
             <div style={{ position: "absolute", left: "50%", transform: "translateX(-50%)", bottom: "8%", width: "84%", textAlign: "center", fontFamily: "system-ui, sans-serif", fontSize: "clamp(18px, 3.4vw, 34px)", fontWeight: 800, color: "#0b1324", textShadow: "0 1px 0 #fff", lineHeight: 1.25 }}>

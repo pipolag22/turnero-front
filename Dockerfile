@@ -12,6 +12,7 @@ ENV VITE_WS_URL=$VITE_WS_URL
 
 COPY package*.json ./
 
+
 # ¡PASO NUEVO! Limpia la caché de NPM antes de instalar
 RUN npm cache clean --force
 

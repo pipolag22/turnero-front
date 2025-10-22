@@ -13,7 +13,16 @@ export type UserMe = {
 
 export type Etapa = 'RECEPCION' | 'BOX' | 'PSICO' | 'FINAL' | 'CAJERO';
 export type Estado = 'EN_COLA' | 'EN_ATENCION' | 'DERIVADO' | 'FINALIZADO' | 'CANCELADO';
+export type TeoricoStatus = "ACTIVO" | "INACTIVO";
+export type PracticoStatus = "INACTIVO" | "CIRCUITO_AUTOS" | "CIRCUITO_MOTOS" | "SUSPENDIDO_LLUVIA";
 export type TicketStatus = Estado;
+
+export type SystemStatus = {
+  alertaEnabled: boolean;
+  alertaText: string;
+  teoricoStatus: TeoricoStatus;
+  practicoStatus: PracticoStatus;
+};
 
 export type Turno = {
   id: string;

@@ -34,12 +34,17 @@ export default function PuestoPage() {
     (me?.boxNumber as number | null | undefined) ??
     (typeof jwt?.boxNumber === "number" ? jwt.boxNumber : null);
 
+  // --- ¡CAMBIO AQUÍ! ---
+  // 1. Definimos la variable de solo lectura aquí, ANTES del return
+  const isReadOnly = role !== "ADMIN";
+  // ---------------------
+
   const buckets: Buckets = useMemo(() => {
     const colas = (snap?.colas ?? {}) as Record<Etapa, Turno[]>;
 
     if (role === "BOX_AGENT") {
       const waitingRecep  = (colas.RECEPCION ?? []).filter(t => t.status === "EN_COLA");
-      const waitingRetiro = (colas.FINAL      ?? []).filter(t => t.status === "EN_COLA");
+      const waitingRetiro = (colas.FINAL     ?? []).filter(t => t.status === "EN_COLA");
       const pool = [...(colas.BOX ?? []), ...(colas.FINAL ?? [])];
       const myCalled =
         pool.find(t => t.assignedBox === myBox && t.status === "EN_COLA") ?? null;
@@ -86,6 +91,7 @@ export default function PuestoPage() {
   };
 
   const guardarNombre = async (t: Turno, nombre: string) => {
+    // La lógica de guardado no necesita cambiar
     const nuevo = (nombre || "").trim();
     if ((t.nombre || "") === nuevo) return;
     await TicketsApi.patch(t.id, { nombre: nuevo });
@@ -106,12 +112,12 @@ export default function PuestoPage() {
   const confirmThen = (question: string, fn: () => Promise<any>) =>
     withSync(async () => { if (!window.confirm(question)) return; await fn(); });
 
-  /* ----- NUEVO: llamar un ticket puntual ----- */
+  /* ----- llamar un ticket puntual ----- */
   const callSpecific = (t: Turno) =>
     withSync(async () => {
-      if (role === "BOX_AGENT")     await OpsApi.boxCall(t.id);
-      else if (role === "PSYCHO_AGENT")  await OpsApi.psyCall(t.id);
-      else                           await OpsApi.cashierCall(t.id);
+      if (role === "BOX_AGENT")         await OpsApi.boxCall(t.id);
+      else if (role === "PSYCHO_AGENT") await OpsApi.psyCall(t.id);
+      else                              await OpsApi.cashierCall(t.id);
     })();
 
   const actions = {
@@ -122,13 +128,11 @@ export default function PuestoPage() {
     cancelBox:     confirmThen("¿Cancelar el llamado actual?", async () => {
                       if (role === "BOX_AGENT" && buckets.myCalled) await OpsApi.cancel(buckets.myCalled.id);
                     }),
-
     deriveTo: (to: "PSICO" | "CAJERO") =>
       confirmThen(`¿Derivar a ${to === "PSICO" ? "Psicofísico" : "Caja"}?`, async () => {
         if (role !== "BOX_AGENT" || !buckets.myAttending) return;
         await OpsApi.boxDerive(buckets.myAttending.id, to);
       })(),
-
     finishFromBox: confirmThen("¿Finalizar el trámite?", async () => {
       if (role !== "BOX_AGENT" || !buckets.myAttending) return;
       await OpsApi.boxFinish(buckets.myAttending.id);
@@ -210,6 +214,7 @@ export default function PuestoPage() {
                   onBlurName={guardarNombre}
                   onCall={callSpecific}
                   callDisabled={!!(buckets.myCalled || buckets.myAttending)}
+                  isReadonly={isReadOnly} // <-- ¡CAMBIO AQUÍ!
                 />
                 <WaitList
                   title="Retiro (esperando)"
@@ -217,6 +222,7 @@ export default function PuestoPage() {
                   onBlurName={guardarNombre}
                   onCall={callSpecific}
                   callDisabled={!!(buckets.myCalled || buckets.myAttending)}
+                  isReadonly={isReadOnly} // <-- ¡CAMBIO AQUÍ!
                 />
               </>
             ) : (
@@ -227,6 +233,7 @@ export default function PuestoPage() {
                 onBlurName={guardarNombre}
                 onCall={callSpecific}
                 callDisabled={!!(buckets.myCalled || buckets.myAttending)}
+                isReadonly={isReadOnly} // <-- ¡CAMBIO AQUÍ!
               />
             )}
           </div>
@@ -236,7 +243,7 @@ export default function PuestoPage() {
             <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
               <h2 className="text-lg font-semibold mb-3">
                 {role === "BOX_AGENT" ? `Mi puesto BOX ${myBox ?? "—"}` :
-                 role === "PSYCHO_AGENT" ? "Mi puesto PSICO" : "Mi puesto CAJERO"}
+                  role === "PSYCHO_AGENT" ? "Mi puesto PSICO" : "Mi puesto CAJERO"}
               </h2>
 
               <div className="min-h-[220px] flex flex-col gap-3">
@@ -352,12 +359,14 @@ function WaitList({
   onBlurName,
   onCall,
   callDisabled = false,
+  isReadonly = false, // <-- Prop agregada
 }: {
   title: string;
   items: Turno[];
   onBlurName: (t: Turno, name: string) => void;
   onCall?: (t: Turno) => void;
   callDisabled?: boolean;
+  isReadonly?: boolean; // <-- Prop agregada
 }) {
   return (
     <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
@@ -369,7 +378,8 @@ function WaitList({
               defaultValue={t.nombre || ""}
               placeholder="Nombre completo…"
               onBlur={(e) => onBlurName(t, e.currentTarget.value)}
-              className="border border-slate-300 rounded-lg px-2 py-1 flex-1"
+              className="border border-slate-300 rounded-lg px-2 py-1 flex-1 disabled:bg-slate-100 disabled:opacity-70" // <-- Estilo para deshabilitado
+              disabled={isReadonly} // <-- Usamos la prop
             />
             <span className="text-xs opacity-60">{t.stage}</span>
             {onCall && (

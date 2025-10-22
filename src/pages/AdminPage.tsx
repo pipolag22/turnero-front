@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { TicketsApi, AdminApi } from "@/lib/api";
 import type { Etapa } from "@/types";
 import { useColaRealtime } from "./hooks/useColaRealtime";
 
-// Definimos los tipos para los estados, para más claridad
+// Definimos los tipos para los estados actualizados
 type TeoricoStatus = "ACTIVO" | "INACTIVO";
 type PracticoStatus = "INACTIVO" | "CIRCUITO_AUTOS" | "CIRCUITO_MOTOS" | "SUSPENDIDO_LLUVIA";
 
@@ -17,14 +17,17 @@ type SystemStatus = {
 };
 
 export default function AdminPage() {
-  const { snap, date } = useColaRealtime();
+  const { snap, date, refetch } = useColaRealtime(); // Asumimos que refetch existe para actualizar la cola
   const nav = useNavigate();
   const [nombre, setNombre] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving] = useState(false); // Usaremos este estado también para importar
   const [loading, setLoading] = useState(true);
 
   // Un solo estado para todo el panel de control
   const [status, setStatus] = useState<SystemStatus | null>(null);
+
+  // Ref para el input de archivo
+  const fileInputRef = useRef<HTMLInputElement>(null); 
 
   // Carga el estado inicial completo desde el backend
   useEffect(() => {
@@ -39,10 +42,11 @@ export default function AdminPage() {
     })();
   }, []);
 
+  // Guardia de carga principal
   if (!snap || loading || !status) {
     return (
       <div className="min-h-screen bg-slate-50">
-        <Topbar date={date} onOpenTV={() => {}} onUsers={() => nav("/admin/users")} onLogout={() => nav("/login")} />
+        <Topbar date={date || ""} onOpenTV={() => {}} onUsers={() => nav("/admin/users")} onLogout={() => nav("/login")} />
         <div className="max-w-6xl mx-auto px-6 py-10 text-slate-600">Cargando…</div>
       </div>
     );
@@ -55,24 +59,63 @@ export default function AdminPage() {
     const newState = { ...status, ...changes };
     try {
       await AdminApi.setStatus(newState); // Usamos el nuevo endpoint setStatus
-      setStatus(newState);
+      setStatus(newState); // Actualiza el estado local inmediatamente
     } catch (e: any) {
       alert(e?.response?.data?.message || e?.message || "Error al guardar el estado");
+      // Opcional: Podrías volver a cargar el estado si falla el guardado
+      // AdminApi.getStatus().then(setStatus); 
     } finally {
       setSaving(false);
     }
   }
 
+  // Crea un turno manualmente
   async function crear() {
     const n = nombre.trim();
     if (!n) return;
-    await TicketsApi.create(n, date);
-    setNombre("");
+    try {
+      await TicketsApi.create(n, date);
+      setNombre("");
+      // Opcional: Refrescar la cola si tu hook lo permite
+      if (refetch) refetch(); 
+    } catch (e: any) {
+       alert(e?.response?.data?.message || e?.message || "Error al crear el turno");
+    }
   }
 
+  // Abre la ventana de TV
   function openTV() {
     const url = new URL("/tv", window.location.origin).toString();
     window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  // Maneja la importación del archivo Excel
+  async function handleImport() {
+    const file = fileInputRef.current?.files?.[0];
+    if (!file) {
+      alert("Por favor, seleccioná un archivo Excel (.xlsx).");
+      return;
+    }
+    if (!file.name.endsWith('.xlsx')) {
+        alert("El archivo debe ser de tipo .xlsx");
+        return;
+    }
+
+    setSaving(true); // Bloquea botones mientras importa
+    try {
+      const result = await AdminApi.importTickets(file, date); // Usa la fecha actual
+      alert(`${result.message}\nImportados: ${result.importedCount}\nFilas omitidas: ${result.skippedRows.length > 0 ? result.skippedRows.join(', ') : 'Ninguna'}`);
+      // Limpiamos el input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      // Refrescar la cola después de importar si tu hook lo permite
+      if (refetch) refetch(); 
+    } catch (e: any) {
+      alert(e?.response?.data?.message || e?.message || "Error al importar el archivo.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -81,9 +124,8 @@ export default function AdminPage() {
         date={date}
         onOpenTV={openTV}
         onUsers={() => nav("/admin/users")}
-        onLogout={() => nav("/login")}
+        onLogout={() => nav("/login")} // Asegúrate que la función logout esté definida o importada si es de AuthContext
       />
-
       <div className="max-w-6xl mx-auto px-6 py-8 space-y-8">
         
         {/* Crear Turno Rápido */}
@@ -108,11 +150,37 @@ export default function AdminPage() {
             </div>
         </section>
 
-        {/* --- NUEVA SECCIÓN: ESTADO DE EXÁMENES --- */}
+        {/* Importar Turnos desde Excel */}
+        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+          <header className="mb-3">
+            <h2 className="text-lg font-bold text-slate-800">Importar Turnos desde Excel</h2>
+            <p className="text-sm text-slate-500">
+              Subí un archivo .xlsx con columnas 'Nombre Completo' y opcionalmente 'Hora'. Se crearán turnos para la fecha: {date}.
+            </p>
+          </header>
+          <div className="flex items-center gap-3 mt-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-50 cursor-pointer"
+              disabled={saving}
+            />
+            <button
+              onClick={handleImport}
+              disabled={saving}
+              className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-sm disabled:opacity-50 whitespace-nowrap"
+            >
+              {saving ? "Importando..." : "Importar Excel"}
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-slate-400">Máximo 5MB. Se omitirán filas sin nombre completo.</p>
+        </section>
+
+        {/* Estado de Exámenes */}
         <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
           <h2 className="text-lg font-bold text-slate-800 mb-4">Estado de Exámenes</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
             <div>
               <label htmlFor="teorico-status" className="block font-semibold text-slate-700">Examen Teórico</label>
               <select
@@ -126,7 +194,6 @@ export default function AdminPage() {
                 <option value="INACTIVO">Inactivo</option>
               </select>
             </div>
-
             <div>
               <label htmlFor="practico-status" className="block font-semibold text-slate-700">Examen Práctico</label>
               <select
@@ -148,7 +215,7 @@ export default function AdminPage() {
           </p>
         </section>
 
-        {/* --- SECCIÓN DE ALERTA GENERAL (MODIFICADA) --- */}
+        {/* Alerta General */}
         <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
           <header className="flex items-center gap-3 mb-3">
             <h2 className="text-lg font-bold text-slate-800">Alerta General en TV</h2>
@@ -158,14 +225,14 @@ export default function AdminPage() {
           </header>
           <textarea
             value={status.alertaText}
-            onChange={(e) => setStatus({ ...status, alertaText: e.target.value })}
+            onChange={(e) => setStatus({ ...status, alertaText: e.target.value })} // Actualiza el estado local al escribir
             rows={3}
             className="mt-1 w-full border border-slate-300 rounded-lg p-2"
             placeholder="Mensaje de emergencia para la TV..."
           />
           <div className="flex items-center gap-2 mt-3">
             <button 
-              onClick={() => saveStatus({ alertaEnabled: true, alertaText: status.alertaText })} 
+              onClick={() => saveStatus({ alertaEnabled: true, alertaText: status.alertaText })} // Guarda el estado actual al activar
               disabled={saving} 
               className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold"
             >
@@ -244,7 +311,6 @@ function Topbar({
             <div className="text-xs opacity-80">Centro Licencias de Conducir</div>
           </div>
         </div>
-
         <div className="ml-auto flex items-center gap-2">
           <span className="hidden sm:inline text-sm opacity-90 mr-2">Admin — {date}</span>
           <button

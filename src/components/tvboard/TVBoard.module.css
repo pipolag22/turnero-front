@@ -191,16 +191,23 @@ ul.list {
   margin: 0;
   padding: 0;
   overflow: auto;
-  max-height: 28vh;
+
+  max-height: 45vh; 
 }
 
 .pill {
-  padding: 10px 12px;
+ 
+  padding: 8px 12px;  /* Hacemos la píldora un poco más delgada */
+  font-size: 10px;    /* Reducimos la letra de la lista de espera */
   border: 1px solid var(--border);
   border-radius: 10px;
   background: #fff;
   font-weight: 600;
   margin-bottom: 8px;
+  /* Para nombres largos en la lista de espera */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .empty {
@@ -212,24 +219,32 @@ ul.list {
   background: var(--accent);
   border: 1px solid #f2d783;
   animation: blink 1.15s ease-in-out infinite;
-  font-size: 26px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
+  
 
-.calling .box {
-  font-size: 12px;
-  color: #534c2f;
-  font-weight: 700;
-  margin-top: 4px
+  font-size: 13px;
+  display: flex;
+  flex-direction: row;  
+  align-items: center;  
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 12px; 
 }
 
 .calling strong {
   font-weight: 800;
-  letter-spacing: 0.3px
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis; 
 }
 
+.calling .box {
+  font-size: 10px;     
+  color: #534c2f;
+  font-weight: 700;
+  margin-top: 0;  
+  flex-shrink: 0; 
+}
 @keyframes blink {
   0%, 100% { background: var(--accent); }
   50% { background: var(--accent-2); }
